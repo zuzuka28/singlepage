@@ -27,6 +27,13 @@ export interface RotatePageRequest {
   newWriteToken: string;
 }
 
+export interface PageClient {
+	createPage(request: CreatePageRequest, locator?: string): Promise<{ revision: number }>;
+	getPage(id: string): Promise<RemotePage>;
+	updatePage(id: string, writeToken: string, request: UpdatePageRequest): Promise<{ revision: number }>;
+	rotatePage(id: string, writeToken: string, request: RotatePageRequest, locator?: string): Promise<{ revision: number }>;
+}
+
 export class RemoteApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); }
 }
@@ -41,7 +48,7 @@ export class PageApi {
     private readonly fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis),
   ) {}
 
-  async createPage(request: CreatePageRequest): Promise<{ revision: number }> {
+  async createPage(request: CreatePageRequest, _locator?: string): Promise<{ revision: number }> {
     return this.request("/api/pages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -68,7 +75,7 @@ export class PageApi {
     });
   }
 
-  async rotatePage(id: string, writeToken: string, request: RotatePageRequest): Promise<{ revision: number }> {
+  async rotatePage(id: string, writeToken: string, request: RotatePageRequest, _locator?: string): Promise<{ revision: number }> {
     return this.request(`/api/pages/${encodeURIComponent(id)}/rotate`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${writeToken}` },

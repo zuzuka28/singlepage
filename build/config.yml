@@ -1,0 +1,41 @@
+version: '3'
+
+info:
+  companyName: "Singlepage"
+  productName: "Singlepage"
+  productIdentifier: "app.singlepage.local"
+  description: "Local-first zero-knowledge infinite outline"
+  copyright: "Singlepage contributors"
+  comments: "Wails v3 desktop application"
+  version: "0.1.0"
+
+dev_mode:
+  root_path: .
+  log_level: warn
+  debounce: 750
+  ignore:
+    dir:
+      - .git
+      - .omx
+      - bin
+      - node_modules
+      - playwright-report
+      - test-results
+      - web/dist
+      - internal/handler/frontend/dist
+      - cmd/app/internal/app/frontend/dist
+    file:
+      - .DS_Store
+      - "*_test.go"
+    watched_extension:
+      - "*.go"
+      - "*.svelte"
+      - "*.ts"
+      - "*.css"
+      - "*.html"
+    git_ignore: true
+  executes:
+    - cmd: make build-app
+      type: blocking
+    - cmd: make run-app
+      type: primary

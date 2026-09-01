@@ -19,6 +19,7 @@ describe("opaque remote API", () => {
       salt: new Uint8Array([3]),
       ciphertext: new Uint8Array([1, 2]),
     });
+    expect(fetchMock.mock.calls[0][1]).toBeUndefined();
   });
 
   it("encodes atomic page-id rotation", async () => {

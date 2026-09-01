@@ -64,6 +64,23 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadStorageIgnoresHTTPEnvironment(t *testing.T) {
+	clearEnvironment(t)
+	t.Setenv("SINGLEPAGE_HTTP_LISTEN", "not-an-address")
+	t.Setenv("SINGLEPAGE_HTTP_READ_TIMEOUT", "not-a-duration")
+	t.Setenv("SINGLEPAGE_SQLITE_DSN", "native.db")
+	t.Setenv("SINGLEPAGE_PAGE_MAX_PAGES", "42")
+
+	storage, err := config.LoadStorage()
+	if err != nil {
+		t.Fatalf("LoadStorage() error = %v", err)
+	}
+
+	if storage.SQLite.DSN != "native.db" || storage.Page.MaxPages != 42 {
+		t.Fatalf("LoadStorage() = %#v", storage)
+	}
+}
+
 //nolint:paralleltest // Tests mutate process environment through t.Setenv.
 func TestLoadEnvironment(t *testing.T) {
 	clearEnvironment(t)
@@ -84,7 +101,7 @@ func TestLoadEnvironment(t *testing.T) {
 		"SINGLEPAGE_HTTP_IDLE_TIMEOUT":        "4s",
 		"SINGLEPAGE_HTTP_SHUTDOWN_TIMEOUT":    "5s",
 		envMetricsListen:                      "localhost:9191",
-		"SINGLEPAGE_SQLITE_DSN":               "file:test.db?_journal_mode=WAL",
+		"SINGLEPAGE_SQLITE_DSN":               "file:test.db?_txlock=immediate",
 		envSQLiteMaxBytes:                     "1000",
 		"SINGLEPAGE_PAGE_MAX_PAGES":           "30",
 		"SINGLEPAGE_REQUEST_MAX_BODY_BYTES":   "3000",
@@ -126,7 +143,7 @@ func assertEnvironmentConfig(t *testing.T, got config.Config, token string) {
 			ShutdownTimeout:   5 * time.Second,
 		},
 		Metrics: config.Metrics{Listen: "localhost:9191"},
-		SQLite:  config.SQLite{DSN: "file:test.db?_journal_mode=WAL", MaxBytes: 1000},
+		SQLite:  config.SQLite{DSN: "file:test.db?_txlock=immediate", MaxBytes: 1000},
 		Page:    config.Page{MaxPages: 30},
 		Protection: config.Protection{
 			MaxRequestBodyBytes: 3000,
@@ -238,35 +255,10 @@ func TestLoadRejectsInvalidEnvironment(t *testing.T) {
 func clearEnvironment(t *testing.T) {
 	t.Helper()
 
-	for _, name := range environmentNames() {
-		t.Setenv(name, "")
-	}
-}
-
-func environmentNames() []string {
-	return []string{
-		"SINGLEPAGE_HTTP_LISTEN",
-		"SINGLEPAGE_HTTP_READ_HEADER_TIMEOUT",
-		envReadTimeout,
-		"SINGLEPAGE_HTTP_WRITE_TIMEOUT",
-		"SINGLEPAGE_HTTP_IDLE_TIMEOUT",
-		"SINGLEPAGE_HTTP_SHUTDOWN_TIMEOUT",
-		envMetricsListen,
-		"SINGLEPAGE_SQLITE_DSN",
-		envSQLiteMaxBytes,
-		"SINGLEPAGE_PAGE_MAX_PAGES",
-		"SINGLEPAGE_REQUEST_MAX_BODY_BYTES",
-		envCreateRate,
-		"SINGLEPAGE_CREATE_BURST",
-		envAdminRate,
-		"SINGLEPAGE_ADMIN_BURST",
-		"SINGLEPAGE_TRUST_PROXY_HEADERS",
-		envAdminTokenFile,
-		envCORSOrigins,
-		envCORSMethods,
-		"SINGLEPAGE_CORS_ALLOWED_HEADERS",
-		"SINGLEPAGE_CORS_EXPOSED_HEADERS",
-		envCORSCredentials,
-		"SINGLEPAGE_CORS_MAX_AGE",
+	for _, entry := range os.Environ() {
+		name, _, found := strings.Cut(entry, "=")
+		if found && strings.HasPrefix(name, "SINGLEPAGE_") {
+			t.Setenv(name, "")
+		}
 	}
 }

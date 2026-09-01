@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	sqlite3 "github.com/mattn/go-sqlite3"
+	sqlite3 "github.com/ncruces/go-sqlite3"
 
 	modelpage "singlepage/internal/model/page"
 )
@@ -28,16 +28,13 @@ func mapError(err error) error {
 		return modelpage.ErrNotFound
 	}
 
-	var sqliteErr sqlite3.Error
-	if errors.As(err, &sqliteErr) {
-		if sqliteErr.Code == sqlite3.ErrFull {
-			return modelpage.ErrQuotaExceeded
-		}
+	if errors.Is(err, sqlite3.FULL) {
+		return modelpage.ErrQuotaExceeded
+	}
 
-		if sqliteErr.ExtendedCode == sqlite3.ErrConstraintPrimaryKey ||
-			sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
-			return modelpage.ErrConflict
-		}
+	if errors.Is(err, sqlite3.CONSTRAINT_PRIMARYKEY) ||
+		errors.Is(err, sqlite3.CONSTRAINT_UNIQUE) {
+		return modelpage.ErrConflict
 	}
 
 	return fmt.Errorf("sqlite operation: %w", err)

@@ -1,0 +1,17 @@
+version: '3'
+
+tasks:
+  build:
+    summary: Build the Wails desktop application
+    cmds:
+      - make build-app
+
+  run:
+    summary: Run the Wails desktop application
+    cmds:
+      - make run-app
+
+  dev:
+    summary: Rebuild and restart the Wails app when Go or frontend sources change
+    cmds:
+      - go tool wails3 dev -config ./build/config.yml

@@ -22,14 +22,16 @@
     type OutlineDocument
   } from '../core';
   import { changePassword, decryptJson, encryptJson, generateSecret, generateWriteToken, randomBytes } from '../crypto';
-  import { PageApi, RemoteApiError, RevisionConflictError, type RemotePage } from '../remote';
+  import { RemoteApiError, RevisionConflictError, type RemotePage } from '../remote';
+  import type { ApplicationRuntime } from '../runtime';
   import { minimumPasswordLength, passwordPattern, passwordValidationError } from './password';
 
   type VaultDocument = { document: OutlineDocument; writeToken: string };
   type Screen = 'create' | 'loading' | 'unlock' | 'outline' | 'missing';
   type Modal = 'link' | 'password' | 'rotate' | null;
 
-  const api = new PageApi();
+  export let runtime: ApplicationRuntime;
+  const api = runtime.api;
   const editors = new Map<string, HTMLTextAreaElement>();
   let screen: Screen = 'create';
   let pageId = '';
@@ -62,6 +64,8 @@
   let writeQueue: Promise<void> = Promise.resolve();
   let autosaveStopped = false;
   let importInput: HTMLInputElement;
+  const nativeMode = runtime.native;
+  let localSessionError = runtime.sessionError;
 
   $: index = buildIndex(document);
   $: results = query.trim() ? search(index, query) : [];
@@ -77,7 +81,7 @@
     : null;
   $: displayRootIds = rootIds.filter((id) => !filteredIds || filteredIds.has(id));
   $: trail = focusedId ? [...ancestors(document, focusedId), focusedId] : [];
-  $: accessLink = pageId && urlSecret ? `${location.origin}/p/${pageId}#${urlSecret}` : '';
+  $: accessLink = !nativeMode && pageId && urlSecret ? `${location.origin}/p/${pageId}#${urlSecret}` : '';
 
   onMount(() => {
     const savedTheme = localStorage.getItem('singlepage-theme');
@@ -124,6 +128,26 @@
     };
   });
 
+  async function rememberLocalLocator() {
+    if (!nativeMode || !pageId || !urlSecret) return false;
+    const remembered = await runtime.rememberLocator(`/p/${pageId}#${urlSecret}`);
+    localSessionError = runtime.sessionError;
+    return remembered;
+  }
+
+  async function createNewNativePage() {
+    await runtime.rememberLocator('/');
+    history.replaceState({}, '', '/');
+    pageId = '';
+    urlSecret = '';
+    password = '';
+    passwordRepeat = '';
+    unlockPassword = '';
+    authError = '';
+    localSessionError = runtime.sessionError;
+    screen = 'create';
+  }
+
   function setTheme(next: 'light' | 'dark', persist = true) {
     theme = next;
     globalThis.document.documentElement.dataset.theme = next;
@@ -143,6 +167,7 @@
       return;
     }
     urlSecret = nextSecret;
+    await rememberLocalLocator();
     password = '';
     unlockPassword = '';
     writeToken = '';
@@ -254,10 +279,14 @@
       const first = insertRoot(createDocument());
       document = first.document;
       const encrypted = await encryptJson({ document, writeToken } satisfies VaultDocument, password, urlSecret);
-      const created = await api.createPage({ id: pageId, salt: encrypted.salt, ciphertext: encrypted.ciphertext, writeToken });
+      const locator = `/p/${pageId}#${urlSecret}`;
+      const created = await api.createPage(
+        { id: pageId, salt: encrypted.salt, ciphertext: encrypted.ciphertext, writeToken },
+        locator
+      );
       revision = created.revision;
       remotePage = { revision, salt: encrypted.salt, ciphertext: encrypted.ciphertext };
-      history.replaceState({}, '', `/p/${pageId}#${urlSecret}`);
+      history.replaceState({}, '', locator);
       screen = 'outline';
       modal = 'link';
       saveState = 'saved';
@@ -585,19 +614,25 @@
         try {
           const generation = saveGeneration;
           const encrypted = await encryptJson({ document, writeToken: nextToken }, password, nextSecret);
-          const updated = await api.rotatePage(pageId, writeToken, {
-            newId: nextPageId,
-            ciphertext: encrypted.ciphertext,
-            salt: encrypted.salt,
-            newWriteToken: nextToken
-          });
+          const locator = `/p/${nextPageId}#${nextSecret}`;
+          const updated = await api.rotatePage(
+            pageId,
+            writeToken,
+            {
+              newId: nextPageId,
+              ciphertext: encrypted.ciphertext,
+              salt: encrypted.salt,
+              newWriteToken: nextToken
+            },
+            locator
+          );
           pageId = nextPageId;
           urlSecret = nextSecret;
           writeToken = nextToken;
           revision = updated.revision;
           remotePage = { revision, salt: encrypted.salt, ciphertext: encrypted.ciphertext };
           savedGeneration = generation;
-          history.replaceState({}, '', `/p/${pageId}#${urlSecret}`);
+          history.replaceState({}, '', locator);
           modal = 'link';
           saveState = generation === saveGeneration ? 'saved' : 'saving';
         } finally { writing = false; }
@@ -651,6 +686,7 @@
             <h2>Opening page…</h2>
           {:else if screen === 'missing'}
             <h2>Page not found</h2><p>Check the link and try again.</p>
+            {#if nativeMode}<button class="secondary" type="button" on:click={createNewNativePage}>Create a new page</button>{/if}
           {:else if screen === 'create'}
             <h2>Create your page</h2>
             <p>Choose a password with at least 8 characters, including a letter and a number, and keep the link you receive.</p>
@@ -664,6 +700,7 @@
             <button class="primary" disabled={busy}>{busy ? 'Opening…' : 'Open'}</button>
           {/if}
           {#if authError}<p class="error" role="alert">{authError}</p>{/if}
+          {#if localSessionError}<p class="error" role="alert">{localSessionError}</p>{/if}
         </form>
       </section>
     </main>
@@ -704,8 +741,10 @@
 
       {#if settingsOpen}
         <div class="popover">
-          <button type="button" on:click={copyLink}>Copy access link</button>
-          <hr />
+          {#if !nativeMode}
+            <button type="button" on:click={copyLink}>Copy access link</button>
+            <hr />
+          {/if}
           <button type="button" on:click={exportMarkdownFile}>Export Markdown</button>
           <button type="button" disabled={autosaveStopped} on:click={chooseMarkdownFile}>Import Markdown</button>
           <hr />
@@ -763,11 +802,21 @@
   {#if modal === 'link'}
     <div class="modal-backdrop" role="presentation">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="link-title">
-        <div class="eyebrow">Access link</div>
-        <h2 id="link-title">Save this link.</h2>
-        <p class="secret-link">{accessLink}</p>
-        <p>You will also need your password.</p>
-        <div class="button-row"><button class="primary" type="button" on:click={copyLink}>Copy link</button><button class="secondary" type="button" on:click={() => modal = null}>Done</button></div>
+        <div class="eyebrow">{nativeMode ? 'Local vault' : 'Access link'}</div>
+        <h2 id="link-title">{nativeMode ? 'Stored on this device.' : 'Save this link.'}</h2>
+        {#if nativeMode}
+          {#if localSessionError}
+            <p class="error">{localSessionError}</p>
+            <div class="button-row"><button class="primary" type="button" on:click={rememberLocalLocator}>Retry</button><button class="secondary" type="button" on:click={() => modal = null}>Done</button></div>
+          {:else}
+            <p>The app will reopen this vault after a restart. Your password is still required.</p>
+            <div class="button-row"><button class="primary" type="button" on:click={() => modal = null}>Done</button></div>
+          {/if}
+        {:else}
+          <p class="secret-link">{accessLink}</p>
+          <p>You will also need your password.</p>
+          <div class="button-row"><button class="primary" type="button" on:click={copyLink}>Copy link</button><button class="secondary" type="button" on:click={() => modal = null}>Done</button></div>
+        {/if}
       </div>
     </div>
   {:else if modal === 'password'}

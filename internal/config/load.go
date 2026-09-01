@@ -1,42 +1,48 @@
+// Package config loads and validates the application's environment configuration.
 package config
 
-import (
-	"fmt"
-	"os"
-	"strings"
-)
+// Config contains all runtime configuration, grouped by application subsystem.
+type Config struct {
+	HTTP       HTTP
+	Metrics    Metrics
+	SQLite     SQLite
+	Page       Page
+	Protection Protection
+	CORS       CORS
+}
 
-// Load reads and validates configuration from SINGLEPAGE_* environment variables.
+// Load reads every configuration block from SINGLEPAGE_* environment variables.
 func Load() (Config, error) {
-	loaded := defaults()
+	loaded := defaultConfig()
 
-	loadString(&loaded.HTTP.Listen, envHTTPListen)
-	loadString(&loaded.Metrics.Listen, envMetricsListen)
-	loadString(&loaded.SQLite.DSN, envSQLiteDSN)
-
-	err := loadDurations(&loaded)
+	err := loadHTTP(&loaded.HTTP)
 	if err != nil {
 		return Config{}, err
 	}
 
-	err = loadNumbers(&loaded)
+	loadMetrics(&loaded.Metrics)
+
+	err = loadSQLite(&loaded.SQLite)
 	if err != nil {
 		return Config{}, err
 	}
 
-	err = loadBooleans(&loaded)
+	err = loadPage(&loaded.Page)
 	if err != nil {
 		return Config{}, err
 	}
 
-	loadLists(&loaded)
-
-	err = loadAdminToken(&loaded)
+	err = loadProtection(&loaded.Protection)
 	if err != nil {
 		return Config{}, err
 	}
 
-	err = validate(loaded)
+	err = loadCORS(&loaded.CORS)
+	if err != nil {
+		return Config{}, err
+	}
+
+	err = validateConfig(loaded)
 	if err != nil {
 		return Config{}, err
 	}
@@ -44,29 +50,60 @@ func Load() (Config, error) {
 	return loaded, nil
 }
 
-func loadAdminToken(loaded *Config) error {
-	path := strings.TrimSpace(os.Getenv(envAdminTokenFile))
-	if path == "" {
-		return nil
-	}
+// LoadStorage reads only storage-related blocks. Native applications use it so
+// irrelevant HTTP environment variables cannot prevent startup.
+func LoadStorage() (Storage, error) {
+	storage := defaultStorage()
 
-	raw, err := os.ReadFile(path) // #nosec G703 -- The operator explicitly configures this secret file.
+	err := loadSQLite(&storage.SQLite)
 	if err != nil {
-		return fmt.Errorf("%w: read %s: %w", errInvalidEnvironment, envAdminTokenFile, err)
+		return Storage{}, err
 	}
 
-	token := strings.TrimSpace(string(raw))
-	if token == "" {
-		return invalid(envAdminTokenFile, "token file must not be empty")
+	err = loadPage(&storage.Page)
+	if err != nil {
+		return Storage{}, err
 	}
 
-	loaded.Protection.AdminToken = token
+	err = validateStorage(storage)
+	if err != nil {
+		return Storage{}, err
+	}
 
-	return nil
+	return storage, nil
 }
 
-func loadString(target *string, name string) {
-	if raw := strings.TrimSpace(os.Getenv(name)); raw != "" {
-		*target = raw
+func defaultConfig() Config {
+	return Config{
+		HTTP:       defaultHTTP(),
+		Metrics:    defaultMetrics(),
+		SQLite:     defaultSQLite(),
+		Page:       defaultPage(),
+		Protection: defaultProtection(),
+		CORS:       defaultCORS(),
 	}
+}
+
+func validateConfig(loaded Config) error {
+	err := validateHTTP(loaded.HTTP)
+	if err != nil {
+		return err
+	}
+
+	err = validateMetrics(loaded.HTTP, loaded.Metrics)
+	if err != nil {
+		return err
+	}
+
+	err = validateStorage(loaded.Storage())
+	if err != nil {
+		return err
+	}
+
+	err = validateProtection(loaded.Protection)
+	if err != nil {
+		return err
+	}
+
+	return validateCORS(loaded.CORS)
 }

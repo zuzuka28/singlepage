@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
+	_ "github.com/ncruces/go-sqlite3/driver" // Register the CGO-free database/sql driver.
 )
 
 // Open opens and initializes a SQLite page repository.

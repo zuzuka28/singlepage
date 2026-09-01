@@ -13,5 +13,5 @@
     "strict": true,
     "moduleResolution": "bundler"
   },
-  "include": ["web/src/**/*.d.ts", "web/src/**/*.ts", "web/src/**/*.svelte", "vite.config.ts"]
+  "include": ["web/src/**/*.d.ts", "web/src/**/*.ts", "web/src/**/*.svelte", "cmd/app/internal/app/frontend/**/*.ts", "vite.config.ts"]
 }

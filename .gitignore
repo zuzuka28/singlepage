@@ -2,6 +2,8 @@ node_modules/
 web/dist/
 internal/handler/frontend/dist/*
 !internal/handler/frontend/dist/.keep
+cmd/app/internal/app/frontend/dist/*
+!cmd/app/internal/app/frontend/dist/.gitkeep
 data.db
 data.db-*
 *.log
@@ -17,3 +19,4 @@ caddy-local-root.crt
 *.key
 *.pem
 /singlepage
+/bin/

@@ -1,7 +1,10 @@
+name: singlepage
+
 services:
   singlepage:
     build:
-      context: .
+      context: ../../..
+      dockerfile: deploy/dockerfile/Dockerfile
     image: singlepage:local
     restart: unless-stopped
     ports:

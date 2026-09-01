@@ -8,78 +8,10 @@ import (
 	"time"
 )
 
-func loadDurations(loaded *Config) error {
-	values := []struct {
-		name   string
-		target *time.Duration
-	}{
-		{name: envHTTPReadHeaderTimeout, target: &loaded.HTTP.ReadHeaderTimeout},
-		{name: envHTTPReadTimeout, target: &loaded.HTTP.ReadTimeout},
-		{name: envHTTPWriteTimeout, target: &loaded.HTTP.WriteTimeout},
-		{name: envHTTPIdleTimeout, target: &loaded.HTTP.IdleTimeout},
-		{name: envHTTPShutdownTimeout, target: &loaded.HTTP.ShutdownTimeout},
-		{name: envCORSMaxAge, target: &loaded.CORS.MaxAge},
+func loadString(target *string, name string) {
+	if raw := strings.TrimSpace(os.Getenv(name)); raw != "" {
+		*target = raw
 	}
-
-	for _, value := range values {
-		err := parseDuration(value.target, value.name)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func loadNumbers(loaded *Config) error {
-	integers := []struct {
-		name   string
-		target *int64
-	}{
-		{name: envSQLiteMaxBytes, target: &loaded.SQLite.MaxBytes},
-		{name: envPageMaxPages, target: &loaded.Page.MaxPages},
-		{name: envRequestMaxBody, target: &loaded.Protection.MaxRequestBodyBytes},
-	}
-
-	for _, integer := range integers {
-		err := parseInt64(integer.target, integer.name)
-		if err != nil {
-			return err
-		}
-	}
-
-	err := parseInt(&loaded.Protection.CreateBurst, envCreateBurst)
-	if err != nil {
-		return err
-	}
-
-	err = parseInt(&loaded.Protection.AdminBurst, envAdminBurst)
-	if err != nil {
-		return err
-	}
-
-	err = parseFloat64(&loaded.Protection.CreateRatePerSecond, envCreateRate)
-	if err != nil {
-		return err
-	}
-
-	return parseFloat64(&loaded.Protection.AdminRatePerSecond, envAdminRate)
-}
-
-func loadBooleans(loaded *Config) error {
-	err := parseBool(&loaded.Protection.TrustProxyHeaders, envTrustProxy)
-	if err != nil {
-		return err
-	}
-
-	return parseBool(&loaded.CORS.AllowCredentials, envCORSAllowCredentials)
-}
-
-func loadLists(loaded *Config) {
-	loaded.CORS.AllowedOrigins = parseList(envCORSAllowedOrigins, nil)
-	loaded.CORS.AllowedMethods = parseList(envCORSAllowedMethods, loaded.CORS.AllowedMethods)
-	loaded.CORS.AllowedHeaders = parseList(envCORSAllowedHeaders, loaded.CORS.AllowedHeaders)
-	loaded.CORS.ExposedHeaders = parseList(envCORSExposedHeaders, loaded.CORS.ExposedHeaders)
 }
 
 func parseDuration(target *time.Duration, name string) error {
@@ -169,7 +101,6 @@ func parseList(name string, fallback []string) []string {
 	}
 
 	parts := strings.Split(raw, ",")
-
 	result := make([]string, 0, len(parts))
 
 	for _, part := range parts {

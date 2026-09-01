@@ -12,7 +12,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: 'chrome' } }],
   webServer: {
-    command: "npm run build && SINGLEPAGE_HTTP_LISTEN=127.0.0.1:4173 SINGLEPAGE_METRICS_LISTEN=127.0.0.1:4174 SINGLEPAGE_SQLITE_DSN='file:e2e?mode=memory&cache=shared' go run .",
+    command: "npm run build && SINGLEPAGE_HTTP_LISTEN=127.0.0.1:4173 SINGLEPAGE_METRICS_LISTEN=127.0.0.1:4174 SINGLEPAGE_SQLITE_DSN='file:e2e?mode=memory&cache=shared' go run ./cmd/web",
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: false,
     timeout: 120_000

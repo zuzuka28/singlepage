@@ -1,6 +1,8 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
 
+declare const process: { env: Record<string, string | undefined> };
+
 export default defineConfig({
   plugins: [svelte()],
   server: {
@@ -9,8 +11,13 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: 'internal/handler/frontend/dist',
-    emptyOutDir: false
+    outDir: process.env.SINGLEPAGE_TARGET === 'app'
+      ? 'cmd/app/internal/app/frontend/dist'
+      : 'internal/handler/frontend/dist',
+    emptyOutDir: false,
+    rollupOptions: process.env.SINGLEPAGE_TARGET === 'app'
+      ? { external: ['/wails/runtime.js'] }
+      : undefined
   },
   test: {
     environment: 'node',

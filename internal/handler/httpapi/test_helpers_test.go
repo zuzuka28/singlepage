@@ -90,6 +90,7 @@ func newAPIHandler(t *testing.T, pages *fakePageService) http.Handler {
 		}},
 		metrics.New(),
 		logger,
+		true,
 	)
 }
 
