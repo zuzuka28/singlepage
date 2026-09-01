@@ -1,0 +1,191 @@
+name: Release desktop application
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            artifact: singlepage-linux-amd64
+          - runner: windows-2025
+            artifact: singlepage-windows-amd64
+          - runner: macos-latest
+            artifact: singlepage-macos-arm64
+          - runner: macos-15-intel
+            artifact: singlepage-macos-amd64
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            libgtk-4-dev \
+            libwebkitgtk-6.0-dev \
+            pkg-config
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          npm ci
+          go mod download
+
+      - name: Generate Wails bindings
+        shell: bash
+        run: >-
+          go tool wails3 generate bindings
+          -ts -b -names -noevents
+          -f='-tags=wails'
+          -d cmd/app/internal/app/frontend/bindings
+          ./cmd/app/...
+
+      - name: Build frontend
+        shell: bash
+        run: VITE_SINGLEPAGE_RUNTIME=wails SINGLEPAGE_TARGET=app npm run build
+
+      - name: Build Linux application
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p bin package dist
+          go build -trimpath -tags 'wails production' -ldflags '-s -w' \
+            -o bin/singlepage ./cmd/app
+          cp bin/singlepage package/singlepage
+          chmod +x package/singlepage
+          tar -C package -czf dist/${{ matrix.artifact }}.tar.gz singlepage
+
+      - name: Build Windows application
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force bin, package, dist | Out-Null
+          $env:CGO_ENABLED = "0"
+          go build -trimpath -tags "wails production" -ldflags "-s -w -H windowsgui" `
+            -o bin/singlepage.exe ./cmd/app
+          Copy-Item bin/singlepage.exe package/singlepage.exe
+          Compress-Archive -Path package/singlepage.exe `
+            -DestinationPath dist/${{ matrix.artifact }}.zip
+
+      - name: Build macOS application bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          CGO_CFLAGS: -mmacosx-version-min=12.0
+          CGO_LDFLAGS: -mmacosx-version-min=12.0
+          MACOSX_DEPLOYMENT_TARGET: "12.0"
+        run: |
+          set -euo pipefail
+          app='package/Singlepage.app'
+          mkdir -p "$app/Contents/MacOS" dist
+          go build -trimpath -tags 'wails production' -ldflags '-s -w' \
+            -o "$app/Contents/MacOS/Singlepage" ./cmd/app
+
+          short_version="${GITHUB_REF_NAME#v}"
+          short_version="${short_version%%[-+]*}"
+          if [[ ! "$short_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            short_version='0.0.0'
+          fi
+
+          cat > "$app/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDisplayName</key>
+            <string>Singlepage</string>
+            <key>CFBundleExecutable</key>
+            <string>Singlepage</string>
+            <key>CFBundleIdentifier</key>
+            <string>app.singlepage.local</string>
+            <key>CFBundleName</key>
+            <string>Singlepage</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${short_version}</string>
+            <key>CFBundleVersion</key>
+            <string>${GITHUB_RUN_NUMBER}</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>12.0</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+
+          plutil -lint "$app/Contents/Info.plist"
+          codesign --force --deep --sign - "$app"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$app" "dist/${{ matrix.artifact }}.zip"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Create checksums
+        working-directory: release
+        run: sha256sum singlepage-* > SHA256SUMS.txt
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release/* \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --generate-notes \
+              --title "$GITHUB_REF_NAME"
+          fi
