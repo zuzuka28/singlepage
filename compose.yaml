@@ -1,0 +1,18 @@
+services:
+  mindrop:
+    build:
+      context: .
+    image: mindrop:local
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    volumes:
+      - mindrop-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  mindrop-data:

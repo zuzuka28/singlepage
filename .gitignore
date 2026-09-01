@@ -1,0 +1,8 @@
+node_modules/
+web/dist/
+data.db
+data.db-*
+*.log
+playwright-report/
+test-results/
+.DS_Store

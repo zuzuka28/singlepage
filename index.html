@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f7f8fb" />
+    <title>Mindrop — private infinite outline</title>
+    <script>
+      const savedTheme = localStorage.getItem('mindrop-theme');
+      const initialTheme = savedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.dataset.theme = initialTheme;
+      document.querySelector('meta[name="theme-color"]').content = initialTheme === 'dark' ? '#1d2027' : '#f7f8fb';
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/web/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,39 @@
+services:
+  mindrop:
+    build:
+      context: .
+    image: mindrop:local
+    restart: unless-stopped
+    expose:
+      - "8080"
+    volumes:
+      - mindrop-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      mindrop:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN to the public hostname}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  mindrop-data:
+  caddy-data:
+  caddy-config:
