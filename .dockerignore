@@ -10,6 +10,13 @@ data.db-*
 mindrop
 *.log
 .DS_Store
+.env
+.env.*
+!.env.example
+admin-token
+admin-token.*
+*.key
+*.pem
 Dockerfile*
 Caddyfile
 compose*.yaml

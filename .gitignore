@@ -6,3 +6,11 @@ data.db-*
 playwright-report/
 test-results/
 .DS_Store
+.env
+.env.*
+!.env.example
+admin-token
+admin-token.*
+caddy-local-root.crt
+*.key
+*.pem

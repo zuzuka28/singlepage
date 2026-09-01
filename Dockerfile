@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24-alpine AS frontend
+FROM node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS frontend
 
 WORKDIR /src
 
@@ -12,7 +12,7 @@ COPY web ./web
 RUN npm run build
 
 
-FROM golang:1.24-alpine AS backend
+FROM golang:1.27-alpine@sha256:4c9fe60190a2a3350ddc51de80d0224b8a6698d12bdfc999fee45ea9d6c46dbc AS backend
 
 RUN apk add --no-cache build-base
 
@@ -32,7 +32,7 @@ RUN CGO_ENABLED=1 go build \
     .
 
 
-FROM alpine:3.22 AS runtime
+FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce AS runtime
 
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S mindrop \

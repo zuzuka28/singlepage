@@ -29,6 +29,7 @@
   type Modal = 'link' | 'password' | 'rotate' | null;
 
   const api = new PageApi();
+  const minimumPasswordLength = 16;
   const editors = new Map<string, HTMLTextAreaElement>();
   let screen: Screen = 'create';
   let pageId = '';
@@ -242,7 +243,7 @@
 
   async function createPage() {
     authError = '';
-    if (password.length < 8) { authError = 'Use at least 8 characters.'; return; }
+    if (password.length < minimumPasswordLength) { authError = `Use at least ${minimumPasswordLength} characters.`; return; }
     if (password !== passwordRepeat) { authError = 'Passwords do not match.'; return; }
     busy = true;
     try {
@@ -534,7 +535,7 @@
 
   async function submitPasswordChange() {
     modalError = '';
-    if (newPassword.length < 8) { modalError = 'Use at least 8 characters.'; return; }
+    if (newPassword.length < minimumPasswordLength) { modalError = `Use at least ${minimumPasswordLength} characters.`; return; }
     if (newPassword !== newPasswordRepeat) { modalError = 'Passwords do not match.'; return; }
     busy = true;
     saveState = 'saving';
@@ -544,9 +545,16 @@
         writing = true;
         try {
           const generation = saveGeneration;
-          const encrypted = await changePassword({ document, writeToken }, newPassword, urlSecret);
-          const updated = await api.updatePage(pageId, writeToken, { expectedRevision: revision, ciphertext: encrypted.ciphertext, salt: encrypted.salt });
+          const nextWriteToken = generateWriteToken(32);
+          const encrypted = await changePassword({ document, writeToken: nextWriteToken }, newPassword, urlSecret);
+          const updated = await api.updatePage(pageId, writeToken, {
+            expectedRevision: revision,
+            ciphertext: encrypted.ciphertext,
+            salt: encrypted.salt,
+            newWriteToken: nextWriteToken
+          });
           password = newPassword;
+          writeToken = nextWriteToken;
           revision = updated.revision;
           remotePage = { revision, salt: encrypted.salt, ciphertext: encrypted.ciphertext };
           savedGeneration = generation;
@@ -644,8 +652,8 @@
           {:else if screen === 'create'}
             <h2>Create your page</h2>
             <p>Choose a password and keep the link you receive.</p>
-            <label class="field"><span>Password</span><input type="password" autocomplete="new-password" bind:value={password} required /></label>
-            <label class="field"><span>Repeat password</span><input type="password" autocomplete="new-password" bind:value={passwordRepeat} required /></label>
+            <label class="field"><span>Password</span><input type="password" autocomplete="new-password" minlength={minimumPasswordLength} bind:value={password} required /></label>
+            <label class="field"><span>Repeat password</span><input type="password" autocomplete="new-password" minlength={minimumPasswordLength} bind:value={passwordRepeat} required /></label>
             <button class="primary" disabled={busy}>{busy ? 'Creating…' : 'Create page'}</button>
           {:else}
             <h2>Unlock page</h2>
@@ -765,8 +773,8 @@
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="password-title">
         <form on:submit|preventDefault={submitPasswordChange}>
         <div class="eyebrow">Password</div><h2 id="password-title">Change password</h2><p>Use the new password the next time you open this page.</p>
-        <label class="field"><span>New password</span><input type="password" bind:value={newPassword} required /></label>
-        <label class="field"><span>Repeat new password</span><input type="password" bind:value={newPasswordRepeat} required /></label>
+        <label class="field"><span>New password</span><input type="password" autocomplete="new-password" minlength={minimumPasswordLength} bind:value={newPassword} required /></label>
+        <label class="field"><span>Repeat new password</span><input type="password" autocomplete="new-password" minlength={minimumPasswordLength} bind:value={newPasswordRepeat} required /></label>
         {#if modalError}<p class="error">{modalError}</p>{/if}
         <div class="button-row"><button class="primary" disabled={busy}>{busy ? 'Changing…' : 'Change password'}</button><button class="secondary" type="button" on:click={() => modal = null}>Cancel</button></div>
         </form>

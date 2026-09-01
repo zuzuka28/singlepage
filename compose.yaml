@@ -5,7 +5,7 @@ services:
     image: mindrop:local
     restart: unless-stopped
     ports:
-      - "${PORT:-8080}:8080"
+      - "127.0.0.1:${PORT:-8080}:8080"
     volumes:
       - mindrop-data:/data
     read_only: true
@@ -13,6 +13,8 @@ services:
       - /tmp
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
 
 volumes:
   mindrop-data:

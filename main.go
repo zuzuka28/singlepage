@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,16 +24,35 @@ import (
 var frontendFiles embed.FS
 
 func main() {
-	listen := flag.String("listen", ":8080", "HTTP listen address")
+	config := server.DefaultConfig()
+	listen := flag.String("listen", "127.0.0.1:8080", "HTTP listen address")
 	dbPath := flag.String("db", "data.db", "SQLite database path")
+	adminTokenFile := flag.String("admin-token-file", "", "optional file containing the admin deletion token")
+	flag.Int64Var(&config.MaxRequestBodyBytes, "max-request-bytes", config.MaxRequestBodyBytes, "maximum JSON request body size")
+	flag.IntVar(&config.MaxCiphertextBytes, "max-page-bytes", config.MaxCiphertextBytes, "maximum encrypted page size")
+	flag.Int64Var(&config.MaxDatabaseBytes, "max-database-bytes", config.MaxDatabaseBytes, "maximum SQLite logical size; 0 disables")
+	flag.Int64Var(&config.MaxPages, "max-pages", config.MaxPages, "maximum number of stored pages; 0 disables")
+	flag.Float64Var(&config.CreateRatePerSecond, "create-rate", config.CreateRatePerSecond, "per-client sustained page creations per second; 0 disables")
+	flag.IntVar(&config.CreateBurst, "create-burst", config.CreateBurst, "per-client page creation burst")
+	flag.BoolVar(&config.TrustProxyHeaders, "trust-proxy-headers", false, "use the last X-Forwarded-For address for rate limiting")
 	flag.Parse()
+	if *adminTokenFile != "" {
+		raw, err := os.ReadFile(*adminTokenFile)
+		if err != nil {
+			log.Fatal(fmt.Errorf("read admin token: %w", err))
+		}
+		config.AdminToken = strings.TrimSpace(string(raw))
+		if config.AdminToken == "" {
+			log.Fatal("admin token file is empty")
+		}
+	}
 
 	frontend, err := fs.Sub(frontendFiles, "web/dist")
 	if err != nil {
 		log.Fatal(err)
 	}
 	fallback := []byte(`<!doctype html><html><body><main><h1>Frontend is not built</h1><p>Run npm run build and restart the server.</p></main></body></html>`)
-	app, err := server.Open(context.Background(), *dbPath, frontend, fallback)
+	app, err := server.OpenWithConfig(context.Background(), *dbPath, frontend, fallback, config)
 	if err != nil {
 		log.Fatal(err)
 	}

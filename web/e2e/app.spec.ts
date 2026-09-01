@@ -227,15 +227,26 @@ test('rotating the access link invalidates the old link', async ({ page, browser
   await expect(page.getByLabel('Outline block')).toHaveValue('Rotated secret');
 });
 
-test('changing password invalidates the old password', async ({ page }) => {
+test('changing password invalidates the old password and write capability', async ({ page, browser }) => {
   const link = await createPage(page);
   await page.getByLabel('Outline block').fill('Password rotation');
+  await waitForSaved(page);
+
+  const staleContext = await browser.newContext();
+  const stalePage = await staleContext.newPage();
+  await unlock(stalePage, link);
+  await expect(stalePage.getByLabel('Outline block')).toHaveValue('Password rotation');
+
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Change password' }).click();
   await page.getByLabel('New password', { exact: true }).fill('a much newer password');
   await page.getByLabel('Repeat new password', { exact: true }).fill('a much newer password');
   await page.getByRole('button', { name: 'Change password', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 15_000 });
+
+  await stalePage.getByLabel('Outline block').fill('Write with an old password');
+  await expect(stalePage.locator('.save-state')).toHaveText('Link replaced', { timeout: 15_000 });
+  await staleContext.close();
 
   await page.goto(link);
   await page.reload();

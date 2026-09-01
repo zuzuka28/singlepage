@@ -18,7 +18,12 @@ const rotatedTestID = "fedcba98-7654-3210-fedc-ba9876543210"
 
 func newTestServer(t *testing.T, frontend fs.FS) *Server {
 	t.Helper()
-	s, err := Open(context.Background(), filepath.Join(t.TempDir(), "data.db"), frontend, []byte("fallback"))
+	return newTestServerWithConfig(t, frontend, DefaultConfig())
+}
+
+func newTestServerWithConfig(t *testing.T, frontend fs.FS, config Config) *Server {
+	t.Helper()
+	s, err := OpenWithConfig(context.Background(), filepath.Join(t.TempDir(), "data.db"), frontend, []byte("fallback"), config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,5 +255,145 @@ func TestInvalidInputAndMissingPage(t *testing.T) {
 	response := request(t, handler, http.MethodPost, "/api/pages", map[string]any{"id": testID, "unknown": true}, "")
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("unknown JSON field status = %d", response.Code)
+	}
+}
+
+func TestCreationResourceLimits(t *testing.T) {
+	t.Run("ciphertext size", func(t *testing.T) {
+		config := DefaultConfig()
+		config.MaxCiphertextBytes = 4
+		config.CreateRatePerSecond = 0
+		handler := newTestServerWithConfig(t, nil, config).Handler()
+		response := request(t, handler, http.MethodPost, "/api/pages", map[string]any{
+			"id": testID, "salt": []byte("salt"), "ciphertext": []byte("12345"), "writeToken": "token",
+		}, "")
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("oversized ciphertext status = %d, want 400", response.Code)
+		}
+	})
+
+	t.Run("page count", func(t *testing.T) {
+		config := DefaultConfig()
+		config.MaxPages = 1
+		config.CreateRatePerSecond = 0
+		handler := newTestServerWithConfig(t, nil, config).Handler()
+		createPage(t, handler)
+		response := request(t, handler, http.MethodPost, "/api/pages", map[string]any{
+			"id": rotatedTestID, "salt": []byte("salt"), "ciphertext": []byte("cipher"), "writeToken": "token",
+		}, "")
+		if response.Code != statusInsufficientStorage {
+			t.Fatalf("page quota status = %d, want %d", response.Code, statusInsufficientStorage)
+		}
+	})
+
+	t.Run("database size", func(t *testing.T) {
+		config := DefaultConfig()
+		config.MaxRequestBodyBytes = 512 << 10
+		config.MaxCiphertextBytes = 256 << 10
+		config.MaxDatabaseBytes = 64 << 10
+		config.CreateRatePerSecond = 0
+		handler := newTestServerWithConfig(t, nil, config).Handler()
+		response := request(t, handler, http.MethodPost, "/api/pages", map[string]any{
+			"id": testID, "salt": []byte("salt"), "ciphertext": bytes.Repeat([]byte("x"), 128<<10), "writeToken": "token",
+		}, "")
+		if response.Code != statusInsufficientStorage {
+			t.Fatalf("database quota status = %d, body = %s", response.Code, response.Body.String())
+		}
+	})
+
+	t.Run("create rate", func(t *testing.T) {
+		config := DefaultConfig()
+		config.CreateRatePerSecond = 0.000001
+		config.CreateBurst = 1
+		handler := newTestServerWithConfig(t, nil, config).Handler()
+		createPage(t, handler)
+		response := request(t, handler, http.MethodPost, "/api/pages", map[string]any{
+			"id": rotatedTestID, "salt": []byte("salt"), "ciphertext": []byte("cipher"), "writeToken": "token",
+		}, "")
+		if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") == "" {
+			t.Fatalf("rate limit status = %d retry-after = %q", response.Code, response.Header().Get("Retry-After"))
+		}
+	})
+}
+
+func TestDatabaseSizeLimitIsApplied(t *testing.T) {
+	config := DefaultConfig()
+	config.MaxDatabaseBytes = 8 << 20
+	server := newTestServerWithConfig(t, nil, config)
+	var pageSize, maxPageCount int64
+	if err := server.db.QueryRow(`PRAGMA page_size`).Scan(&pageSize); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.db.QueryRow(`PRAGMA max_page_count`).Scan(&maxPageCount); err != nil {
+		t.Fatal(err)
+	}
+	if got := maxPageCount * pageSize; got > config.MaxDatabaseBytes {
+		t.Fatalf("database limit = %d, configured = %d", got, config.MaxDatabaseBytes)
+	}
+}
+
+func TestAdminDeletionCapability(t *testing.T) {
+	config := DefaultConfig()
+	config.AdminToken = "admin-secret-with-at-least-32-bytes"
+	handler := newTestServerWithConfig(t, nil, config).Handler()
+	createPage(t, handler)
+
+	path := "/api/admin/pages/" + testID
+	if response := request(t, handler, http.MethodDelete, path, nil, ""); response.Code != http.StatusUnauthorized {
+		t.Fatalf("missing admin token status = %d, want 401", response.Code)
+	}
+	if response := request(t, handler, http.MethodDelete, path, nil, "wrong"); response.Code != http.StatusForbidden {
+		t.Fatalf("wrong admin token status = %d, want 403", response.Code)
+	}
+	if response := request(t, handler, http.MethodDelete, path, nil, config.AdminToken); response.Code != http.StatusNoContent {
+		t.Fatalf("admin delete status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if response := request(t, handler, http.MethodGet, "/api/pages/"+testID, nil, ""); response.Code != http.StatusNotFound {
+		t.Fatalf("deleted page status = %d, want 404", response.Code)
+	}
+
+	disabled := newTestServer(t, nil).Handler()
+	if response := request(t, disabled, http.MethodDelete, path, nil, config.AdminToken); response.Code != http.StatusNotFound {
+		t.Fatalf("disabled admin API status = %d, want 404", response.Code)
+	}
+}
+
+func TestBrowserSecurityHeaders(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("SPA INDEX"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	handler := newTestServer(t, os.DirFS(dir)).Handler()
+	req := httptest.NewRequest(http.MethodGet, "/p/"+testID, nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, req)
+
+	for name, want := range map[string]string{
+		"Content-Security-Policy":   "frame-ancestors 'none'",
+		"X-Frame-Options":           "DENY",
+		"Strict-Transport-Security": "max-age=31536000",
+		"X-Robots-Tag":              "noindex",
+	} {
+		if got := response.Header().Get(name); !bytes.Contains([]byte(got), []byte(want)) {
+			t.Errorf("%s = %q, want to contain %q", name, got, want)
+		}
+	}
+}
+
+func TestTrustedProxyUsesLastForwardedAddress(t *testing.T) {
+	config := DefaultConfig()
+	config.TrustProxyHeaders = true
+	server := newTestServerWithConfig(t, nil, config)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "172.18.0.3:1234"
+	req.Header.Set("X-Forwarded-For", "203.0.113.99, 198.51.100.7")
+	if got := server.clientAddress(req); got != "198.51.100.7" {
+		t.Fatalf("client address = %q, want last forwarded address", got)
+	}
+
+	server.config.TrustProxyHeaders = false
+	if got := server.clientAddress(req); got != "172.18.0.3" {
+		t.Fatalf("untrusted proxy client address = %q, want remote address", got)
 	}
 }

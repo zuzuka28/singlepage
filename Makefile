@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 
 APP_NAME ?= mindrop
-LISTEN ?= :8080
+LISTEN ?= 127.0.0.1:8080
 DB ?= ./data.db
 
 .DEFAULT_GOAL := help

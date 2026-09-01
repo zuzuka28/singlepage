@@ -4,6 +4,7 @@ services:
       context: .
     image: mindrop:local
     restart: unless-stopped
+    command: ["-listen", ":8080", "-db", "/data/data.db", "-trust-proxy-headers"]
     expose:
       - "8080"
     volumes:
@@ -13,9 +14,11 @@ services:
       - /tmp
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
     restart: unless-stopped
     depends_on:
       mindrop:
@@ -30,6 +33,9 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+    read_only: true
+    tmpfs:
+      - /tmp
     security_opt:
       - no-new-privileges:true
 
