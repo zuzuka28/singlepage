@@ -23,13 +23,13 @@
   } from '../core';
   import { changePassword, decryptJson, encryptJson, generateSecret, generateWriteToken, randomBytes } from '../crypto';
   import { PageApi, RemoteApiError, RevisionConflictError, type RemotePage } from '../remote';
+  import { minimumPasswordLength, passwordPattern, passwordValidationError } from './password';
 
   type VaultDocument = { document: OutlineDocument; writeToken: string };
   type Screen = 'create' | 'loading' | 'unlock' | 'outline' | 'missing';
   type Modal = 'link' | 'password' | 'rotate' | null;
 
   const api = new PageApi();
-  const minimumPasswordLength = 16;
   const editors = new Map<string, HTMLTextAreaElement>();
   let screen: Screen = 'create';
   let pageId = '';
@@ -80,7 +80,7 @@
   $: accessLink = pageId && urlSecret ? `${location.origin}/p/${pageId}#${urlSecret}` : '';
 
   onMount(() => {
-    const savedTheme = localStorage.getItem('mindrop-theme');
+    const savedTheme = localStorage.getItem('singlepage-theme');
     setTheme(savedTheme === 'light' || savedTheme === 'dark'
       ? savedTheme
       : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light', false);
@@ -128,7 +128,7 @@
     theme = next;
     globalThis.document.documentElement.dataset.theme = next;
     globalThis.document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', next === 'dark' ? '#1d2027' : '#f7f8fb');
-    if (persist) localStorage.setItem('mindrop-theme', next);
+    if (persist) localStorage.setItem('singlepage-theme', next);
   }
 
   function toggleTheme() {
@@ -243,7 +243,8 @@
 
   async function createPage() {
     authError = '';
-    if (password.length < minimumPasswordLength) { authError = `Use at least ${minimumPasswordLength} characters.`; return; }
+    const validationError = passwordValidationError(password);
+    if (validationError) { authError = validationError; return; }
     if (password !== passwordRepeat) { authError = 'Passwords do not match.'; return; }
     busy = true;
     try {
@@ -494,7 +495,7 @@
     const href = URL.createObjectURL(blob);
     const link = globalThis.document.createElement('a');
     link.href = href;
-    link.download = `mindrop-outline-${new Date().toISOString().slice(0, 10)}.md`;
+    link.download = `singlepage-outline-${new Date().toISOString().slice(0, 10)}.md`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(href), 0);
   }
@@ -535,7 +536,8 @@
 
   async function submitPasswordChange() {
     modalError = '';
-    if (newPassword.length < minimumPasswordLength) { modalError = `Use at least ${minimumPasswordLength} characters.`; return; }
+    const validationError = passwordValidationError(newPassword);
+    if (validationError) { modalError = validationError; return; }
     if (newPassword !== newPasswordRepeat) { modalError = 'Passwords do not match.'; return; }
     busy = true;
     saveState = 'saving';
@@ -632,7 +634,7 @@
 <div class="shell">
   {#if screen === 'create' || screen === 'unlock' || screen === 'loading' || screen === 'missing'}
     <header class="topbar auth-topbar">
-      <div class="wordmark"><span class="brand-mark">M</span><span>mindrop / outline</span></div>
+      <div class="wordmark"><span class="brand-mark">S</span><span>singlepage / outline</span></div>
       <div class="auth-actions">
         <button class="icon-button" type="button" aria-label={theme === 'light' ? 'Use dark theme' : 'Use light theme'} on:click={toggleTheme}>◐</button>
       </div>
@@ -651,9 +653,9 @@
             <h2>Page not found</h2><p>Check the link and try again.</p>
           {:else if screen === 'create'}
             <h2>Create your page</h2>
-            <p>Choose a password and keep the link you receive.</p>
-            <label class="field"><span>Password</span><input type="password" autocomplete="new-password" minlength={minimumPasswordLength} bind:value={password} required /></label>
-            <label class="field"><span>Repeat password</span><input type="password" autocomplete="new-password" minlength={minimumPasswordLength} bind:value={passwordRepeat} required /></label>
+            <p>Choose a password with at least 8 characters, including a letter and a number, and keep the link you receive.</p>
+            <label class="field"><span>Password</span><input type="password" autocomplete="new-password" minlength={minimumPasswordLength} pattern={passwordPattern} title="Use at least 8 characters, including a letter and a number." bind:value={password} required /></label>
+            <label class="field"><span>Repeat password</span><input type="password" autocomplete="new-password" minlength={minimumPasswordLength} pattern={passwordPattern} title="Use at least 8 characters, including a letter and a number." bind:value={passwordRepeat} required /></label>
             <button class="primary" disabled={busy}>{busy ? 'Creating…' : 'Create page'}</button>
           {:else}
             <h2>Unlock page</h2>
@@ -668,7 +670,7 @@
   {:else}
     <main class="workspace">
       <header class="topbar">
-        <div class="wordmark"><span class="brand-mark">M</span><span>mindrop / outline</span></div>
+        <div class="wordmark"><span class="brand-mark">S</span><span>singlepage / outline</span></div>
         <div class="search-wrap">
           <span class="search-icon">⌕</span>
           <input
@@ -772,9 +774,9 @@
     <div class="modal-backdrop" role="presentation">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="password-title">
         <form on:submit|preventDefault={submitPasswordChange}>
-        <div class="eyebrow">Password</div><h2 id="password-title">Change password</h2><p>Use the new password the next time you open this page.</p>
-        <label class="field"><span>New password</span><input type="password" autocomplete="new-password" minlength={minimumPasswordLength} bind:value={newPassword} required /></label>
-        <label class="field"><span>Repeat new password</span><input type="password" autocomplete="new-password" minlength={minimumPasswordLength} bind:value={newPasswordRepeat} required /></label>
+        <div class="eyebrow">Password</div><h2 id="password-title">Change password</h2><p>Use at least 8 characters, including a letter and a number.</p>
+        <label class="field"><span>New password</span><input type="password" autocomplete="new-password" minlength={minimumPasswordLength} pattern={passwordPattern} title="Use at least 8 characters, including a letter and a number." bind:value={newPassword} required /></label>
+        <label class="field"><span>Repeat new password</span><input type="password" autocomplete="new-password" minlength={minimumPasswordLength} pattern={passwordPattern} title="Use at least 8 characters, including a letter and a number." bind:value={newPasswordRepeat} required /></label>
         {#if modalError}<p class="error">{modalError}</p>{/if}
         <div class="button-row"><button class="primary" disabled={busy}>{busy ? 'Changing…' : 'Change password'}</button><button class="secondary" type="button" on:click={() => modal = null}>Cancel</button></div>
         </form>

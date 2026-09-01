@@ -3,5 +3,5 @@
 		Strict-Transport-Security "max-age=31536000"
 		-Server
 	}
-	reverse_proxy mindrop:8080
+	reverse_proxy singlepage:8080
 }

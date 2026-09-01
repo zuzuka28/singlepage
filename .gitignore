@@ -1,5 +1,7 @@
 node_modules/
 web/dist/
+internal/handler/frontend/dist/*
+!internal/handler/frontend/dist/.keep
 data.db
 data.db-*
 *.log
@@ -14,3 +16,4 @@ admin-token.*
 caddy-local-root.crt
 *.key
 *.pem
+/singlepage

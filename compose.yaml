@@ -1,13 +1,13 @@
 services:
-  mindrop:
+  singlepage:
     build:
       context: .
-    image: mindrop:local
+    image: singlepage:local
     restart: unless-stopped
     ports:
       - "127.0.0.1:${PORT:-8080}:8080"
     volumes:
-      - mindrop-data:/data
+      - singlepage-data:/data
     read_only: true
     tmpfs:
       - /tmp
@@ -17,4 +17,4 @@ services:
       - ALL
 
 volumes:
-  mindrop-data:
+  singlepage-data:

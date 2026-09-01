@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const PASSWORD = 'correct horse battery staple';
+const PASSWORD = 'correct horse battery staple 1';
+const NEW_PASSWORD = 'a much newer password 2';
 
 async function createPage(page: Page, password = PASSWORD) {
   await page.goto('/');
@@ -53,7 +54,7 @@ test('create, type, refresh, unlock, and open in a second browser context', asyn
 test('nested blocks are searchable through inherited metadata', async ({ page }) => {
   await createPage(page);
   const root = page.getByLabel('Outline block').first();
-  await root.fill('Work #work project::mindrop');
+  await root.fill('Work #work project::singlepage');
   await root.press('Enter');
   const child = page.getByLabel('Outline block').nth(1);
   await child.press('Tab');
@@ -67,20 +68,20 @@ test('nested blocks are searchable through inherited metadata', async ({ page })
   await laterChild.fill('Later note');
   await root.press('Enter');
   const laterRoot = page.getByLabel('Outline block').last();
-  await laterRoot.fill('Encryption archive #work project::mindrop area::security');
+  await laterRoot.fill('Encryption archive #work project::singlepage area::security');
   await waitForSaved(page);
 
   const search = page.getByLabel('Search', { exact: true });
-  await search.fill('Encryption #work project:mindrop area:security');
+  await search.fill('Encryption #work project:singlepage area:security');
   await expect(page.locator('.block-row.search-match .block-text').first()).toHaveValue('Encryption area::security');
   await expect(page.locator('.autocomplete-menu')).toHaveCount(0);
   await expect(page.getByLabel('Outline block')).toHaveCount(5);
   await expect(page.getByLabel('Outline block').nth(2)).toHaveValue('WebCrypto');
   await expect(page.getByLabel('Outline block').nth(3)).toHaveValue('Later note');
-  await expect(page.getByLabel('Outline block').nth(4)).toHaveValue('Encryption archive #work project::mindrop area::security');
+  await expect(page.getByLabel('Outline block').nth(4)).toHaveValue('Encryption archive #work project::singlepage area::security');
 
   await search.press('Enter');
-  await expect(search).toHaveValue('Encryption #work project:mindrop area:security');
+  await expect(search).toHaveValue('Encryption #work project:singlepage area:security');
   await expect(page.getByLabel('Outline block').nth(1)).toBeFocused();
 
   await grandchild.focus();
@@ -95,7 +96,7 @@ test('nested blocks are searchable through inherited metadata', async ({ page })
   await expect(newFilteredBlock).toBeFocused();
   await expect(page.getByLabel('Outline block').nth(3)).toHaveValue('First child created in the filtered tree');
   await expect(page.getByLabel('Outline block').nth(5)).toHaveValue('Later note');
-  await expect(page.getByLabel('Outline block').nth(6)).toHaveValue('Encryption archive #work project::mindrop area::security');
+  await expect(page.getByLabel('Outline block').nth(6)).toHaveValue('Encryption archive #work project::singlepage area::security');
   await newFilteredBlock.fill('New text inside the filtered tree');
   await expect(newFilteredBlock).toHaveValue('New text inside the filtered tree');
   await expect(page.getByLabel('Outline block')).toHaveCount(7);
@@ -104,10 +105,10 @@ test('nested blocks are searchable through inherited metadata', async ({ page })
   await root.press('Enter');
   const newFilteredRoot = page.getByLabel('Outline block').last();
   await expect(newFilteredRoot).toBeFocused();
-  await expect(page.getByLabel('Outline block').nth(6)).toHaveValue('Encryption archive #work project::mindrop area::security');
+  await expect(page.getByLabel('Outline block').nth(6)).toHaveValue('Encryption archive #work project::singlepage area::security');
   await newFilteredRoot.fill('New top-level filtered block');
   await expect(newFilteredRoot).toHaveValue('New top-level filtered block');
-  await expect(search).toHaveValue('Encryption #work project:mindrop area:security');
+  await expect(search).toHaveValue('Encryption #work project:singlepage area:security');
 });
 
 test('arrow keys navigate blocks, Shift+Enter adds a line, and keyboard shortcuts zoom branches', async ({ page }) => {
@@ -178,7 +179,7 @@ test('exports the outline and imports a Markdown file', async ({ page }) => {
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export Markdown' }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/^mindrop-outline-\d{4}-\d{2}-\d{2}\.md$/);
+  expect(download.suggestedFilename()).toMatch(/^singlepage-outline-\d{4}-\d{2}-\d{2}\.md$/);
 
   await page.getByRole('button', { name: 'Settings' }).click();
   const chooserPromise = page.waitForEvent('filechooser');
@@ -239,8 +240,8 @@ test('changing password invalidates the old password and write capability', asyn
 
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Change password' }).click();
-  await page.getByLabel('New password', { exact: true }).fill('a much newer password');
-  await page.getByLabel('Repeat new password', { exact: true }).fill('a much newer password');
+  await page.getByLabel('New password', { exact: true }).fill(NEW_PASSWORD);
+  await page.getByLabel('Repeat new password', { exact: true }).fill(NEW_PASSWORD);
   await page.getByRole('button', { name: 'Change password', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 15_000 });
 
@@ -254,7 +255,7 @@ test('changing password invalidates the old password and write capability', asyn
   await page.getByRole('button', { name: 'Open' }).click();
   await expect(page.getByText('Unable to open page. Check the password and link.')).toBeVisible();
 
-  await page.getByLabel('Password').fill('a much newer password');
+  await page.getByLabel('Password').fill(NEW_PASSWORD);
   await page.getByRole('button', { name: 'Open' }).click();
   await expect(page.getByLabel('Outline block')).toHaveValue('Password rotation');
 });

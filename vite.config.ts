@@ -9,8 +9,8 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: 'web/dist',
-    emptyOutDir: true
+    outDir: 'internal/handler/frontend/dist',
+    emptyOutDir: false
   },
   test: {
     environment: 'node',

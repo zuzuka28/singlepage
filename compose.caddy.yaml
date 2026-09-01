@@ -1,14 +1,15 @@
 services:
-  mindrop:
+  singlepage:
     build:
       context: .
-    image: mindrop:local
+    image: singlepage:local
     restart: unless-stopped
-    command: ["-listen", ":8080", "-db", "/data/data.db", "-trust-proxy-headers"]
+    environment:
+      SINGLEPAGE_TRUST_PROXY_HEADERS: "true"
     expose:
       - "8080"
     volumes:
-      - mindrop-data:/data
+      - singlepage-data:/data
     read_only: true
     tmpfs:
       - /tmp
@@ -21,7 +22,7 @@ services:
     image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
     restart: unless-stopped
     depends_on:
-      mindrop:
+      singlepage:
         condition: service_healthy
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN to the public hostname}
@@ -40,6 +41,6 @@ services:
       - no-new-privileges:true
 
 volumes:
-  mindrop-data:
+  singlepage-data:
   caddy-data:
   caddy-config:

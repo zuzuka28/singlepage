@@ -2,12 +2,12 @@
 .gitignore
 .omx
 node_modules
-web/dist
+internal/handler/frontend/dist
 playwright-report
 test-results
 data.db
 data.db-*
-mindrop
+singlepage
 *.log
 .DS_Store
 .env

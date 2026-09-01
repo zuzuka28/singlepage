@@ -8,7 +8,7 @@ import { insertChild, insertRoot } from "./tree";
 const fixed = (value: string) => () => value;
 
 function fixture() {
-  let document = insertRoot(createDocument(), "Work #work project::mindrop rating::9\n2026-09-01", 0, fixed("work")).document;
+  let document = insertRoot(createDocument(), "Work #work project::singlepage rating::9\n2026-09-01", 0, fixed("work")).document;
   document = insertChild(document, "work", "Encryption area::security", 0, fixed("encryption")).document;
   document = insertChild(document, "encryption", "WebCrypto leader election", 0, fixed("webcrypto")).document;
   document = insertRoot(document, "Archive #archive status::done rating::4\n2026-10-01", 1, fixed("archive")).document;
@@ -29,7 +29,7 @@ describe("query and search", () => {
   });
 
   it("searches text and inherited metadata with AND semantics", () => {
-    expect(search(fixture(), '"leader election" #work project:mindrop area:security rating:>8 @>=2026-09-01').map((x) => x.id))
+    expect(search(fixture(), '"leader election" #work project:singlepage area:security rating:>8 @>=2026-09-01').map((x) => x.id))
       .toEqual(["webcrypto"]);
   });
 
@@ -43,7 +43,7 @@ describe("query and search", () => {
       tags: ["archive", "work"],
       properties: {
         area: ["security"],
-        project: ["mindrop"],
+        project: ["singlepage"],
         rating: ["4", "9"],
         status: ["done"],
       },

@@ -17,15 +17,15 @@ describe("metadata", () => {
   });
 
   it("parses multiple compact properties on one line", () => {
-    const metadata = parseMetadata("project::mindrop area::security");
+    const metadata = parseMetadata("project::singlepage area::security");
 
-    expect(metadata.properties.get("project")).toEqual({ type: "string", value: "mindrop" });
+    expect(metadata.properties.get("project")).toEqual({ type: "string", value: "singlepage" });
     expect(metadata.properties.get("area")).toEqual({ type: "string", value: "security" });
   });
 
   it("rejects whitespace around the property separator", () => {
-    expect(parseMetadata("project :: mindrop").properties.size).toBe(0);
-    expect(parseMetadata("project:: mindrop").properties.size).toBe(0);
+    expect(parseMetadata("project :: singlepage").properties.size).toBe(0);
+    expect(parseMetadata("project:: singlepage").properties.size).toBe(0);
   });
 
   it("builds effective metadata with union and nearest property wins", () => {

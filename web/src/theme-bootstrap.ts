@@ -1,4 +1,4 @@
-const savedTheme = localStorage.getItem('mindrop-theme');
+const savedTheme = localStorage.getItem('singlepage-theme');
 const initialTheme = savedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 
 document.documentElement.dataset.theme = initialTheme;

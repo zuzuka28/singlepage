@@ -1,0 +1,140 @@
+version: '2'
+linters:
+  default: all
+  disable:
+    - cyclop
+    - depguard
+    - errname
+    - funlen
+    - gocognit
+    - gocyclo
+    - godox
+    - govet
+    - importas
+    - ireturn
+    - lll
+    - misspell
+    - mnd
+    - nlreturn
+    - nonamedreturns
+    - tagalign
+    - tagliatelle
+    - varnamelen
+    - gomodguard
+    - wsl
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*github.com/gin-gonic/gin.Context).Error
+        - (*github.com/gin-gonic/gin.Context).AbortWithError
+        - (*io.ReadCloser).Close
+    forbidigo:
+      forbid:
+        - pattern: (?i)(^|\.)print(f|ln)?$
+    gomoddirectives:
+      replace-local: true
+    gomodguard_v2:
+      blocked:
+        - module: github.com/magiconair/properties
+          recommendations:
+            - github.com/stretchr/testify/assert
+            - github.com/stretchr/testify/require
+          reason: Please use the one testing framework for the whole repository.
+    gosec:
+      config:
+        G306: '0666'
+    mnd:
+      ignored-functions:
+        - os.OpenFile
+        - os.WriteFile
+        - os.Chmod
+        - pflag.*
+        - flag.*
+        - strconv.Format
+        - strconv.Parse
+        - strconv.Append
+    revive:
+      confidence: 0.8
+      enable-all-rules: true
+      rules:
+        - name: function-length
+          arguments:
+            - 50
+            - 0
+          severity: warning
+          disabled: false
+        - name: function-result-limit
+          arguments:
+            - 3
+          severity: warning
+          disabled: false
+        - name: cognitive-complexity
+          arguments:
+            - 20
+          severity: warning
+          disabled: false
+        - name: cyclomatic
+          arguments:
+            - 10
+          severity: warning
+          disabled: false
+        - name: line-length-limit
+          arguments:
+            - 110
+          severity: warning
+          exclude: ['**/generate.go']
+          disabled: false
+        - name: argument-limit
+          arguments:
+            - 6
+          severity: warning
+          disabled: false
+        - name: unhandled-error
+          arguments:
+            - bytes\.Buffer\.Write.*
+            - strings\.Builder\.Write.*
+          disabled: false
+        - name: comment-spacings
+          disabled: true
+        - name: unchecked-type-assertion
+          disabled: true
+        - name: max-public-structs
+          disabled: true
+        - name: banned-characters
+          disabled: true
+        - name: file-header
+          disabled: true
+        - name: flag-parameter
+          disabled: true
+        - name: struct-tag
+          disabled: true
+        - name: add-constant
+          disabled: true
+        - name: empty-lines
+          disabled: true
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
+      case-max-lines: 1
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+    rules:
+      - path: "_test\\.go$"
+        linters: [exhaustruct, errcheck]
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

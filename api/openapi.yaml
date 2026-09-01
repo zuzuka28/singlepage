@@ -1,0 +1,265 @@
+openapi: 3.0.3
+info:
+  title: Singlepage API
+  version: 1.0.0
+  description: Storage API for opaque encrypted pages.
+servers:
+  - url: /
+tags:
+  - name: pages
+  - name: admin
+paths:
+  /api/pages:
+    post:
+      operationId: PageCreateCmd
+      tags: [pages]
+      summary: Create an encrypted page
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePageRequest'
+      responses:
+        '201':
+          description: Page created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevisionResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '507': { $ref: '#/components/responses/InsufficientStorage' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/pages/{id}:
+    parameters:
+      - $ref: '#/components/parameters/PageID'
+    get:
+      operationId: PageFetchQry
+      tags: [pages]
+      summary: Fetch an encrypted page
+      responses:
+        '200':
+          description: Page found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageResponse'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    put:
+      operationId: PageUpdateCmd
+      tags: [pages]
+      summary: Update an encrypted page using revision CAS
+      description: The write capability may be supplied as a Bearer token or in writeToken for legacy clients.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePageRequest'
+      responses:
+        '200':
+          description: Page updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevisionResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '507': { $ref: '#/components/responses/InsufficientStorage' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/pages/{id}/rotate:
+    parameters:
+      - $ref: '#/components/parameters/PageID'
+    post:
+      operationId: PageRotateCmd
+      tags: [pages]
+      summary: Atomically rotate the page ID and write capability
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RotatePageRequest'
+      responses:
+        '201':
+          description: Page rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevisionResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '507': { $ref: '#/components/responses/InsufficientStorage' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/admin/pages/{id}:
+    parameters:
+      - $ref: '#/components/parameters/PageID'
+    delete:
+      operationId: PageDeleteCmd
+      tags: [admin]
+      summary: Delete a page using the administrative capability
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Page deleted
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    PageID:
+      name: id
+      in: path
+      required: true
+      description: Opaque page identifier.
+      schema:
+        $ref: '#/components/schemas/PageID'
+  schemas:
+    PageID:
+      type: string
+      minLength: 16
+      maxLength: 128
+      pattern: '^[A-Za-z0-9_-]+$'
+    PageResponse:
+      type: object
+      additionalProperties: false
+      required: [revision, salt, ciphertext]
+      properties:
+        revision:
+          type: integer
+          format: int64
+          minimum: 1
+        salt:
+          type: string
+          format: byte
+        ciphertext:
+          type: string
+          format: byte
+    RevisionResponse:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        revision:
+          type: integer
+          format: int64
+          minimum: 1
+    CreatePageRequest:
+      type: object
+      additionalProperties: false
+      required: [id, salt, ciphertext, writeToken]
+      properties:
+        id:
+          $ref: '#/components/schemas/PageID'
+        salt:
+          type: string
+          format: byte
+        ciphertext:
+          type: string
+          format: byte
+        writeToken:
+          type: string
+    UpdatePageRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision, ciphertext]
+      properties:
+        expectedRevision:
+          type: integer
+          format: int64
+        ciphertext:
+          type: string
+          format: byte
+        salt:
+          type: string
+          format: byte
+        newWriteToken:
+          type: string
+        writeToken:
+          type: string
+          description: Legacy alternative to Authorization Bearer.
+    RotatePageRequest:
+      type: object
+      additionalProperties: false
+      required: [newId, salt, ciphertext, newWriteToken]
+      properties:
+        newId:
+          $ref: '#/components/schemas/PageID'
+        salt:
+          type: string
+          format: byte
+        ciphertext:
+          type: string
+          format: byte
+        newWriteToken:
+          type: string
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Missing authorization
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: Invalid authorization
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Page not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: Page already exists or changed concurrently
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    InsufficientStorage:
+      description: Storage quota exceeded
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
