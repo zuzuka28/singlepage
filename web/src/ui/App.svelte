@@ -13,9 +13,11 @@
     insertChild,
     insertRoot,
     outdent,
+    parseMarkdown,
     removeBlock,
     reorder,
     search,
+    serializeMarkdown,
     updateBlock,
     type OutlineDocument
   } from '../core';
@@ -58,6 +60,7 @@
   let writing = false;
   let writeQueue: Promise<void> = Promise.resolve();
   let autosaveStopped = false;
+  let importInput: HTMLInputElement;
 
   $: index = buildIndex(document);
   $: results = query.trim() ? search(index, query) : [];
@@ -484,6 +487,51 @@
     await navigator.clipboard.writeText(accessLink);
   }
 
+  function exportMarkdownFile() {
+    settingsOpen = false;
+    const blob = new Blob([serializeMarkdown(document)], { type: 'text/markdown;charset=utf-8' });
+    const href = URL.createObjectURL(blob);
+    const link = globalThis.document.createElement('a');
+    link.href = href;
+    link.download = `mindrop-outline-${new Date().toISOString().slice(0, 10)}.md`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(href), 0);
+  }
+
+  function chooseMarkdownFile() {
+    settingsOpen = false;
+    if (autosaveStopped) {
+      alert('Resolve the saving issue before importing a file.');
+      return;
+    }
+    importInput.value = '';
+    importInput.click();
+  }
+
+  async function importMarkdownFile(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    const hasContent = Object.values(document.blocks).some((block) => block.text || block.children.length) || document.roots.length > 1;
+    if (hasContent && !confirm('Importing this file will replace all current notes. Continue?')) return;
+
+    try {
+      let imported = parseMarkdown(await file.text());
+      if (!imported.roots.length) imported = insertRoot(imported).document;
+      focusedId = null;
+      lastEditorId = null;
+      query = '';
+      filterVisibleExtras = new Set();
+      searchOpen = false;
+      setDocument(imported, imported.roots[0]);
+    } catch (error) {
+      console.error('Markdown import failed', error);
+      alert('Unable to import this Markdown file.');
+    }
+  }
+
   async function submitPasswordChange() {
     modalError = '';
     if (newPassword.length < 8) { modalError = 'Use at least 8 characters.'; return; }
@@ -648,10 +696,22 @@
         <div class="popover">
           <button type="button" on:click={copyLink}>Copy access link</button>
           <hr />
+          <button type="button" on:click={exportMarkdownFile}>Export Markdown</button>
+          <button type="button" disabled={autosaveStopped} on:click={chooseMarkdownFile}>Import Markdown</button>
+          <hr />
           <button type="button" on:click={() => openModal('password')}>Change password</button>
           <button type="button" on:click={() => openModal('rotate')}>Create new access link</button>
         </div>
       {/if}
+
+      <input
+        class="file-input"
+        bind:this={importInput}
+        type="file"
+        accept=".md,text/markdown,text/plain"
+        aria-label="Markdown file"
+        on:change={importMarkdownFile}
+      />
 
       {#if saveState === 'conflict'}
         <div class="conflict"><span>This page changed elsewhere.</span><button class="secondary" type="button" on:click={() => location.reload()}>Reload page</button></div>

@@ -116,7 +116,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .popover { position: fixed; right: clamp(18px, 3vw, 34px); top: 58px; z-index: 40; width: 250px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-raised); box-shadow: 0 16px 38px var(--shadow); }
 .popover button { width: 100%; min-height: 40px; padding: 9px 11px; border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer; }
 .popover button:hover { background: var(--surface-muted); }
+.popover button:disabled { opacity: .5; cursor: not-allowed; }
 .popover hr { margin: 6px 0; border: 0; border-top: 1px solid var(--line); }
+.file-input { display: none; }
 
 .canvas { width: min(76ch, calc(100% - 32px)); margin: 0 auto; padding: clamp(52px, 8vw, 92px) 0 160px; }
 .breadcrumbs { min-height: 28px; display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 27px; color: var(--muted); font-size: 12px; }

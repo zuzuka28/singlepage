@@ -170,6 +170,34 @@ test('theme choice survives reload', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
+test('exports the outline and imports a Markdown file', async ({ page }) => {
+  await createPage(page);
+  await page.getByLabel('Outline block').fill('Original note');
+
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export Markdown' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^mindrop-outline-\d{4}-\d{2}-\d{2}\.md$/);
+
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Import Markdown' }).click();
+  const chooser = await chooserPromise;
+  page.once('dialog', (dialog) => dialog.accept());
+  await chooser.setFiles({
+    name: 'notes.md',
+    mimeType: 'text/markdown',
+    buffer: Buffer.from('- Imported root\n  - Imported child\n- Second root\n')
+  });
+
+  await expect(page.getByLabel('Outline block')).toHaveCount(3);
+  await expect(page.getByLabel('Outline block').nth(0)).toHaveValue('Imported root');
+  await expect(page.getByLabel('Outline block').nth(1)).toHaveValue('Imported child');
+  await expect(page.getByLabel('Outline block').nth(2)).toHaveValue('Second root');
+  await waitForSaved(page);
+});
+
 test('rotating the access link invalidates the old link', async ({ page, browser }) => {
   const oldLink = await createPage(page);
   await page.getByLabel('Outline block').fill('Rotated secret');
