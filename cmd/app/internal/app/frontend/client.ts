@@ -1,4 +1,4 @@
-import { fromBase64, toBase64 } from '../../../../../web/src/crypto';
+import { fromBase64, toBase64 } from '../../../../../web/src/infrastructure/crypto';
 import {
   RemoteApiError,
   RevisionConflictError,
@@ -7,11 +7,21 @@ import {
   type RemotePage,
   type RotatePageRequest,
   type UpdatePageRequest
-} from '../../../../../web/src/remote';
-import type { ApplicationRuntime } from '../../../../../web/src/runtime';
+} from '../../../../../web/src/infrastructure/api';
+import type { ApplicationRuntime } from '../../../../../web/src/app/logic/runtime';
+import { browserSecrets, browserVaultCrypto } from '../../../../../web/src/infrastructure/browser/crypto';
+import {
+  accessPresentation,
+  browserClipboard,
+  browserFiles,
+  BrowserNavigation,
+  browserTheme
+} from '../../../../../web/src/infrastructure/browser/platform';
+import type { PageHistory } from '../../../../../web/src/features/page-session/logic/ports';
 import {
   CreatePage,
   GetPage,
+  ListLocators,
   RememberLocator,
   RestoreLocator,
   RotatePage,
@@ -57,29 +67,66 @@ class NativePageClient implements PageClient {
 }
 
 export class NativeRuntime implements ApplicationRuntime {
-  readonly api: PageClient = new NativePageClient();
+  readonly repository: PageClient = new NativePageClient();
+  readonly api = this.repository;
+  readonly history = new NativeHistory();
+  readonly navigation = new BrowserNavigation();
+  readonly clipboard = browserClipboard;
+  readonly files = browserFiles;
+  readonly theme = browserTheme;
+  readonly crypto = browserVaultCrypto;
+  readonly secrets = browserSecrets;
+  readonly access = accessPresentation('local-vault');
   readonly native = true;
-  sessionError = '';
+  get sessionError() { return this.history.error; }
 
   async restoreLocator() {
+    const locator = await this.history.restore();
+    if (locator) this.navigation.replace(locator);
+  }
+
+  async rememberLocator(locator: string) { return this.history.remember(locator); }
+
+  async listLocators() { return this.history.list(); }
+}
+
+class NativeHistory implements PageHistory {
+  readonly available = true;
+  error = '';
+
+  async restore() {
     try {
       const locator = await RestoreLocator();
-      history.replaceState({}, '', locator);
+      this.error = '';
+      return locator || null;
     } catch (error) {
       console.error('Native session restore failed', error);
-      this.sessionError = 'Unable to restore the last page.';
+      this.error = 'Unable to restore the last page.';
+      return null;
     }
   }
 
-  async rememberLocator(locator: string) {
+  async remember(locator: string) {
     try {
       await RememberLocator(locator);
-      this.sessionError = '';
+      this.error = '';
       return true;
     } catch (error) {
       console.error('Native session persistence failed', error);
-      this.sessionError = 'Unable to save restart recovery. Keep this window open and retry.';
+      this.error = 'Unable to save restart recovery. Keep this window open and retry.';
       return false;
+    }
+  }
+
+  async list() {
+    try {
+      const locators = await ListLocators();
+      this.error = '';
+      return locators;
+    } catch (error) {
+      console.error('Native page history failed', error);
+      this.error = 'Unable to load previously opened pages.';
+      return [];
     }
   }
 }

@@ -35,7 +35,10 @@ func (service *Service) RestoreLocator(ctx context.Context) (string, error) {
 
 	_, err = service.pages.Get(ctx, modelpage.GetServiceQry{ID: id})
 	if err == nil {
-		_ = service.locators.Write(current, "")
+		err = service.locators.WriteRemembered(current, "")
+		if err != nil {
+			return "", fmt.Errorf("confirm recovered native locator: %w", err)
+		}
 
 		return current, nil
 	}
@@ -58,12 +61,40 @@ func (service *Service) RestoreLocator(ctx context.Context) (string, error) {
 }
 
 func (service *Service) RememberLocator(locator string) error {
-	err := service.locators.Write(locator, "")
+	err := service.locators.WriteRemembered(locator, "")
 	if err != nil {
 		return fmt.Errorf("remember native locator: %w", err)
 	}
 
 	return nil
+}
+
+// ListLocators returns usable native page locators in most-recently-opened order.
+func (service *Service) ListLocators(ctx context.Context) ([]string, error) {
+	locators, err := service.locators.List()
+	if err != nil {
+		return nil, fmt.Errorf("list native locators: %w", err)
+	}
+
+	available := make([]string, 0, len(locators))
+	for _, locator := range locators {
+		id, locatorErr := locatorID(locator)
+		if locatorErr != nil {
+			return nil, locatorErr
+		}
+
+		_, pageErr := service.pages.Get(ctx, modelpage.GetServiceQry{ID: id})
+		if pageErr == nil {
+			available = append(available, locator)
+			continue
+		}
+
+		if !errors.Is(pageErr, modelpage.ErrNotFound) {
+			return nil, fmt.Errorf("check native locator %q: %w", locator, pageErr)
+		}
+	}
+
+	return available, nil
 }
 
 func (service *Service) prepareLocator(ctx context.Context, locator, pageID string) (string, error) {
@@ -81,7 +112,7 @@ func (service *Service) prepareLocator(ctx context.Context, locator, pageID stri
 		return "", fmt.Errorf("resolve previous native locator: %w", err)
 	}
 
-	err = service.locators.Write(locator, previous)
+	err = service.locators.WriteRemembered(locator, previous)
 	if err != nil {
 		return "", fmt.Errorf("persist pending native locator: %w", err)
 	}

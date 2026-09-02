@@ -53,6 +53,9 @@ paths:
       tags: [pages]
       summary: Update an encrypted page using revision CAS
       description: The write capability may be supplied as a Bearer token or in writeToken for legacy clients.
+      security:
+        - bearerAuth: []
+        - {}
       requestBody:
         required: true
         content:

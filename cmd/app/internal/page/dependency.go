@@ -20,4 +20,6 @@ type Pages interface {
 type LocatorStore interface {
 	Read() (current string, previous string, err error)
 	Write(current string, previous string) error
+	WriteRemembered(current string, previous string) error
+	List() ([]string, error)
 }

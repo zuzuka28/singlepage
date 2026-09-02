@@ -2,8 +2,8 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-09-01
-- Primary product surfaces: create, unlock, outline, focused branch, search, settings.
+- Last refreshed: 2026-09-02
+- Primary product surfaces: start/create, recent native pages, unlock, outline, focused branch, search, settings.
 
 ## Brand
 - Personality: calm, precise, private, and lightweight.
@@ -21,8 +21,8 @@
 - Key contexts of use: sustained desktop writing and quick retrieval.
 
 ## Information architecture
-- Primary navigation: persistent compact header with brand, search, theme, persistence, and settings.
-- Core routes/screens: create/unlock at `/`; outline at `/p/<id>#<secret>`.
+- Primary navigation: persistent compact header with a home-linked brand, search, theme, persistence, and settings.
+- Core routes/screens: start/create at `/`, unlock and outline at `/p/<id>#<secret>`; the Wails start screen also lists previously opened local pages.
 - Content hierarchy: breadcrumb, filtered or focused outline, block rows.
 
 ## Design principles
@@ -41,13 +41,13 @@
 
 ## Components
 - Existing components to reuse: `App.svelte`, `BlockNode.svelte`, core tree/search modules.
-- New/changed components: theme toggle, block bullet control, inline autocomplete, tree-filtered search state.
-- Variants and states: light/dark; saved/saving/error/conflict; matched/context block; collapsed/focused block.
-- Token/component ownership: `web/src/ui/styles.css` owns tokens and themes; Svelte components own interaction state.
+- New/changed components: theme toggle, drag-handle bullet, inline autocomplete, tree-filtered search state, Create/Open start toggle, page-link input, native recent-page list, home-linked wordmark.
+- Variants and states: light/dark; saved/saving/error/conflict; matched/context block; collapsed/focused/selected/dragging/drop-target block.
+- Token/component ownership: `web/src/app/styles.css` owns tokens and themes; feature UI components own local interaction state; the root app actor owns route/session/document/save state; `app-controller.svelte.ts` is a reactive adapter for transient UI and browser events behind the declarative `AppShell.svelte` view.
 
 ## Accessibility
 - Target standard: WCAG 2.2 AA where practical.
-- Keyboard/focus behavior: ArrowUp/ArrowDown cross block boundaries only at textarea edges; Shift+Enter inserts a newline; focus-visible outlines remain prominent.
+- Keyboard/focus behavior: ArrowUp/ArrowDown cross block boundaries only at textarea edges; Shift+Enter inserts a newline; repeated Ctrl/Cmd+A expands structural selection from the current block through its ancestor branches; Delete/Backspace removes the structural selection; Tab/Shift+Tab indents or outdents it; Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo or redo text and structural changes; Escape or any ordinary click clears structural selection; focus-visible outlines remain prominent.
 - Contrast/readability: text and muted states retain readable contrast in both themes.
 - Screen-reader semantics: named controls, real buttons, breadcrumbs, status messages.
 - Reduced motion and sensory considerations: no essential hover-only control; reduced-motion removes transitions.
@@ -59,7 +59,7 @@
 
 ## Interaction states
 - Loading: short neutral status without implementation detail.
-- Empty: immediate editable block or `No matches` during search.
+- Empty: immediate editable block, `No matches` during search, or a start screen with create and paste-link actions when there is no native history.
 - Error: concise recovery-oriented copy.
 - Success: quiet saved indicator.
 - Disabled: controls visually muted and non-interactive.
@@ -72,6 +72,7 @@
 
 ## Implementation constraints
 - Framework/styling system: Svelte 5, TypeScript, plain CSS variables, no UI dependency.
+- Architecture: actor-centric vertical slices (`app`, `features`, `entities`, `infrastructure`, `shared`); feature logic has no Svelte or adapter dependencies; app UI consumes selectors/snapshots rather than child actors.
 - Design-token constraints: light/dark share violet/blue accents; surface/text/border tokens switch by theme.
 - Performance constraints: local search should remain responsive at 10,000 blocks; no external fonts or images.
 - Compatibility constraints: modern evergreen browsers and native Web Crypto.

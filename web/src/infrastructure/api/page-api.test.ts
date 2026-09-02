@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import { PageApi, RevisionConflictError } from "./api";
+import { PageApi, RevisionConflictError } from "./page-api";
 
 describe("opaque remote API", () => {
   it("encodes opaque bytes and bearer capability without plaintext fields", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response('{"revision":2}', { status: 200 }));
     const api = new PageApi("https://example.test", fetchMock);
     await api.updatePage("page/id", "write-secret", { expectedRevision: 1, ciphertext: new Uint8Array([1, 2]), salt: new Uint8Array([3]) });
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("https://example.test/api/pages/page%2Fid");
-    expect(init?.headers).toMatchObject({ Authorization: "Bearer write-secret" });
-    expect(JSON.parse(String(init?.body))).toEqual({ expectedRevision: 1, ciphertext: "AQI=", salt: "Aw==" });
+    const [request] = fetchMock.mock.calls[0] as [Request];
+    expect(request.url).toBe("https://example.test/api/pages/page%2Fid");
+    expect(request.headers.get('Authorization')).toBe("Bearer write-secret");
+    expect(await request.json()).toEqual({ expectedRevision: 1, ciphertext: "AQI=", salt: "Aw==" });
   });
 
   it("decodes fetched opaque bytes", async () => {
@@ -19,7 +19,7 @@ describe("opaque remote API", () => {
       salt: new Uint8Array([3]),
       ciphertext: new Uint8Array([1, 2]),
     });
-    expect(fetchMock.mock.calls[0][1]).toBeUndefined();
+    expect((fetchMock.mock.calls[0][0] as Request).url).toBe('http://singlepage.invalid/api/pages/id');
   });
 
   it("encodes atomic page-id rotation", async () => {
@@ -32,10 +32,10 @@ describe("opaque remote API", () => {
       newWriteToken: "new-token",
     });
 
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("https://example.test/api/pages/old-id/rotate");
-    expect(init?.headers).toMatchObject({ Authorization: "Bearer old-token" });
-    expect(JSON.parse(String(init?.body))).toEqual({
+    const [request] = fetchMock.mock.calls[0] as [Request];
+    expect(request.url).toBe("https://example.test/api/pages/old-id/rotate");
+    expect(request.headers.get('Authorization')).toBe("Bearer old-token");
+    expect(await request.json()).toEqual({
       newId: "new-id",
       salt: "Aw==",
       ciphertext: "AQI=",

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sync"
 )
 
 const locatorFileName = "session-locator"
@@ -20,22 +21,27 @@ var (
 )
 
 type locatorState struct {
-	Current  string `json:"current"`
-	Previous string `json:"previous,omitempty"`
+	Current  string   `json:"current"`
+	Previous string   `json:"previous,omitempty"`
+	History  []string `json:"history,omitempty"`
 }
 
 // Store atomically persists the current locator and an optional recovery fallback.
 type Store struct {
 	directory string
+	mutex     sync.Mutex
 }
 
 // New creates a locator store rooted in the native application data directory.
 func New(directory string) *Store {
-	return &Store{directory: directory}
+	return &Store{directory: directory, mutex: sync.Mutex{}}
 }
 
 // Read returns the current and recovery locators.
 func (store *Store) Read() (current string, previous string, err error) {
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+
 	state, err := store.readState()
 	if err != nil {
 		return "", "", err
@@ -46,13 +52,71 @@ func (store *Store) Read() (current string, previous string, err error) {
 
 // Write durably replaces the locator state.
 func (store *Store) Write(current, previous string) error {
-	return store.writeState(locatorState{Current: current, Previous: previous})
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+
+	state, err := store.readState()
+	if err != nil && !errors.Is(err, errInvalidLocator) {
+		return err
+	}
+
+	state.Current = current
+
+	state.Previous = previous
+
+	return store.writeState(state)
+}
+
+// List returns previously opened page locators, newest first.
+func (store *Store) List() ([]string, error) {
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+
+	state, err := store.readState()
+	if err != nil {
+		return nil, err
+	}
+
+	return append([]string(nil), state.History...), nil
+}
+
+// WriteRemembered atomically replaces the locator state and moves the current page to the history front.
+func (store *Store) WriteRemembered(current, previous string) error {
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+
+	if !validLocator(current) || (previous != "" && !validLocator(previous)) {
+		return errInvalidLocator
+	}
+
+	state, err := store.readState()
+	if err != nil {
+		return err
+	}
+
+	state.Current = current
+
+	state.Previous = previous
+	if current != "/" {
+		history := make([]string, 0, len(state.History)+1)
+
+		history = append(history, current)
+		for _, remembered := range state.History {
+			if remembered != current {
+				history = append(history, remembered)
+			}
+		}
+
+		state.History = history
+	}
+
+	return store.writeState(state)
 }
 
 func (store *Store) readState() (locatorState, error) {
 	raw, err := os.ReadFile(filepath.Join(store.directory, locatorFileName))
 	if errors.Is(err, os.ErrNotExist) {
-		return locatorState{Current: "/", Previous: ""}, nil
+		return locatorState{Current: "/", Previous: "", History: nil}, nil
 	}
 
 	if err != nil {
@@ -66,7 +130,7 @@ func (store *Store) readState() (locatorState, error) {
 
 	legacyLocator := string(raw)
 	if validLocator(legacyLocator) {
-		return locatorState{Current: legacyLocator, Previous: ""}, nil
+		return locatorState{Current: legacyLocator, Previous: "", History: nil}, nil
 	}
 
 	return locatorState{}, errInvalidLocator
@@ -123,7 +187,17 @@ func (store *Store) writeState(state locatorState) error {
 }
 
 func validState(state locatorState) bool {
-	return validLocator(state.Current) && (state.Previous == "" || validLocator(state.Previous))
+	if !validLocator(state.Current) || (state.Previous != "" && !validLocator(state.Previous)) {
+		return false
+	}
+
+	for _, locator := range state.History {
+		if locator == "/" || !validLocator(locator) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func validLocator(locator string) bool {

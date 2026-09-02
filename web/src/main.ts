@@ -1,7 +1,7 @@
 import { mount } from 'svelte';
-import App from './ui/App.svelte';
-import { createApplicationRuntime } from './runtime';
-import './ui/styles.css';
+import App from './app/App.svelte';
+import { createApplicationRuntime } from './app/logic/runtime';
+import './app/styles.css';
 
 const runtime = await createApplicationRuntime();
 await runtime.restoreLocator();

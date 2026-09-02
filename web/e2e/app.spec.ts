@@ -51,6 +51,31 @@ test('create, type, refresh, unlock, and open in a second browser context', asyn
   await second.close();
 });
 
+test('opens a pasted link from the start screen and returns there from the app icon', async ({ page }) => {
+  const link = await createPage(page);
+  await page.getByLabel('Outline block').fill('Opened from a pasted link');
+  await waitForSaved(page);
+
+  await page.getByRole('button', { name: 'Back to start' }).click();
+  await expect(page.getByRole('heading', { name: 'Create your page' })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Open' }).click();
+  await page.getByLabel('Page link').fill(link);
+  await page.getByRole('button', { name: 'Open link' }).click();
+  await expect(page.getByRole('heading', { name: 'Unlock page' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Back to start' }).click();
+  await expect(page.getByRole('heading', { name: 'Create your page' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Open' }).click();
+  await page.getByLabel('Page link').fill(link);
+  await page.getByRole('button', { name: 'Open link' }).click();
+  await expect(page.getByRole('heading', { name: 'Unlock page' })).toBeVisible();
+
+  await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(page.getByLabel('Outline block')).toHaveValue('Opened from a pasted link');
+});
+
 test('nested blocks are searchable through inherited metadata', async ({ page }) => {
   await createPage(page);
   const root = page.getByLabel('Outline block').first();
@@ -152,6 +177,113 @@ test('arrow keys navigate blocks, Shift+Enter adds a line, and keyboard shortcut
   await zoomedChild.press('Control+[');
   await expect(page.getByRole('navigation', { name: 'Focused branch' })).toHaveText('All notes');
   await expect(second).toBeFocused();
+});
+
+test('undoes and redoes text and structural block changes', async ({ page }) => {
+  await createPage(page);
+  const first = page.getByLabel('Outline block').first();
+  await first.fill('First version');
+  await page.getByLabel('Search', { exact: true }).click();
+  await first.click();
+  await first.fill('Second version');
+
+  await first.press('Control+z');
+  await expect(first).toHaveValue('First version');
+  await first.press('Control+Shift+z');
+  await expect(first).toHaveValue('Second version');
+
+  await first.press('Enter');
+  const second = page.getByLabel('Outline block').nth(1);
+  await expect(second).toBeFocused();
+  await second.press('Control+z');
+  await expect(page.getByLabel('Outline block')).toHaveCount(1);
+  await first.press('Control+Shift+z');
+  await expect(page.getByLabel('Outline block')).toHaveCount(2);
+});
+
+test('highlights a structural selection and deletes it from the keyboard', async ({ page }) => {
+  await createPage(page);
+  const root = page.getByLabel('Outline block').first();
+  await root.fill('Selected root');
+  await root.press('Control+Enter');
+  await page.getByLabel('Outline block').nth(1).fill('Selected child');
+
+  await root.press('Control+a');
+  await expect(page.locator('.selected-block')).toHaveCount(1);
+  await root.press('Delete');
+
+  await expect(page.locator('.selected-block')).toHaveCount(0);
+  await expect(page.getByLabel('Outline block')).toHaveCount(1);
+  await expect(page.getByLabel('Outline block')).toHaveValue('');
+});
+
+test('expands Ctrl+A selection from the current block through parent branches', async ({ page }) => {
+  await createPage(page);
+  const root = page.getByLabel('Outline block').first();
+  await root.fill('Root');
+  await root.press('Control+Enter');
+  const child = page.getByLabel('Outline block').nth(1);
+  await child.fill('Child');
+  await child.press('Control+Enter');
+  const grandchild = page.getByLabel('Outline block').nth(2);
+  await grandchild.fill('Grandchild');
+
+  await grandchild.press('Control+a');
+  await expect(page.locator('.selected-block')).toHaveCount(1);
+  await grandchild.press('Control+a');
+  await expect(page.locator('.selected-block')).toHaveCount(2);
+  await grandchild.press('Control+a');
+  await expect(page.locator('.selected-block')).toHaveCount(3);
+
+  await page.getByLabel('Search', { exact: true }).click();
+  await expect(page.locator('.selected-block')).toHaveCount(0);
+});
+
+test('indents and outdents selected blocks together with Tab', async ({ page }) => {
+  await createPage(page);
+  const first = page.getByLabel('Outline block').first();
+  await first.fill('First');
+  await first.press('Enter');
+  const parent = page.getByLabel('Outline block').nth(1);
+  await parent.fill('Parent');
+  await parent.press('Control+Enter');
+  const second = page.getByLabel('Outline block').nth(2);
+  await second.fill('Second');
+  await second.press('Enter');
+  await page.getByLabel('Outline block').nth(3).fill('Third');
+
+  await second.press('Control+a');
+  await second.press('Control+a');
+  await expect(page.locator('.selected-block')).toHaveCount(3);
+  await second.press('Tab');
+  await expect(page.locator('.outline > [data-block-id]')).toHaveCount(1);
+  await expect(page.locator('.outline > [data-block-id] > .children > [data-block-id]')).toHaveCount(1);
+
+  await second.press('Shift+Tab');
+  await expect(page.locator('.outline > [data-block-id]')).toHaveCount(2);
+});
+
+test('drags selected blocks together by the point next to the row', async ({ page }) => {
+  await createPage(page);
+  const first = page.getByLabel('Outline block').first();
+  await first.fill('First block');
+  await first.press('Enter');
+  const parent = page.getByLabel('Outline block').nth(1);
+  await parent.fill('Parent block');
+  await parent.press('Control+Enter');
+  const child = page.getByLabel('Outline block').nth(2);
+  await child.fill('Child block');
+  await child.press('Control+a');
+  await child.press('Control+a');
+  await expect(page.locator('.selected-block')).toHaveCount(2);
+
+  const handles = page.getByRole('button', { name: 'Move block or open branch' });
+  const firstRow = page.locator('.block-row').first();
+  await handles.nth(1).dragTo(firstRow, { targetPosition: { x: 100, y: 1 } });
+
+  await expect(page.getByLabel('Outline block').nth(0)).toHaveValue('Parent block');
+  await expect(page.getByLabel('Outline block').nth(1)).toHaveValue('Child block');
+  await expect(page.getByLabel('Outline block').nth(2)).toHaveValue('First block');
 });
 
 test('warns before a dirty page can be reloaded', async ({ page }) => {

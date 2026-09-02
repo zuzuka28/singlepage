@@ -33,14 +33,19 @@ dev-app: ## Build and run the Wails v3 app without the Wails CLI watcher
 	$(MAKE) build-app
 	$(MAKE) run-app
 
-check: check-app lint ## Run frontend checks and Go static analysis, including Wails-tagged code
+check: check-openapi check-app lint ## Run frontend checks and Go static analysis, including Wails-tagged code
 	npm run check
 	go vet ./...
 
 generate: generate-openapi generate-wire bindings-app ## Regenerate OpenAPI, Wire, and Wails generated code
 
-generate-openapi: ## Regenerate OpenAPI server and public REST client
+generate-openapi: ## Regenerate OpenAPI server and public REST and TypeScript clients
 	go generate ./internal/handler/httpapi/gen ./pkg/rest
+	npm run api:generate
+
+.PHONY: check-openapi
+check-openapi: ## Verify committed TypeScript OpenAPI types have not drifted
+	npm run api:check
 
 generate-wire: ## Regenerate the application dependency graph
 	go tool wire ./internal/provider

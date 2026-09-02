@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "api:generate": "openapi-typescript api/openapi.yaml -o web/src/generated/openapi/schema.d.ts",
+    "api:check": "node scripts/check-openapi.mjs",
+    "check:architecture": "node --test scripts/check-architecture.test.mjs && node scripts/check-architecture.mjs",
+    "check": "npm run api:check && npm run check:architecture && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test"
@@ -15,10 +18,16 @@
     "@playwright/test": "^1.62.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tsconfig/svelte": "^5.0.8",
+    "openapi-typescript": "7.13.0",
     "svelte": "^5.57.0",
     "svelte-check": "^4.7.6",
     "typescript": "^6.0.3",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "@xstate/svelte": "5.0.0",
+    "openapi-fetch": "0.17.0",
+    "xstate": "5.32.6"
   }
 }

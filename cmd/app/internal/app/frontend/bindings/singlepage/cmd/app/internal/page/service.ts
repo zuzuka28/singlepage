@@ -26,6 +26,15 @@ export function GetPage(id: string): $CancellablePromise<$models.Response> {
     });
 }
 
+/**
+ * ListLocators returns usable native page locators in most-recently-opened order.
+ */
+export function ListLocators(): $CancellablePromise<string[]> {
+    return $Call.ByName("singlepage/cmd/app/internal/page.Service.ListLocators").then(($result: any) => {
+        return $$createType2($result);
+    });
+}
+
 export function RememberLocator(locator: string): $CancellablePromise<void> {
     return $Call.ByName("singlepage/cmd/app/internal/page.Service.RememberLocator", locator);
 }
@@ -49,3 +58,4 @@ export function UpdatePage(id: string, writeToken: string, request: $models.Upda
 // Private type creation functions
 const $$createType0 = $models.MutationResponse.createFrom;
 const $$createType1 = $models.Response.createFrom;
+const $$createType2 = $Create.Array($Create.Any);
